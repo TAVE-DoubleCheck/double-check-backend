@@ -1,6 +1,7 @@
 # 미니 보험 코어 — 상품 데이터 영역 (F1)
 
-공공데이터포털 우체국보험 API 3종(약관 / 보장내용 / 1회 보험료계산)을 PostgreSQL에 적재한다.
+공공데이터포털 우체국보험 API 3종(약관 / 보장내용 / 1회 보험료계산)을 PostgreSQL에 적재하고,
+적재된 데이터를 읽는 상품 조회·보험료 계산 API를 제공한다.
 서비스 코드는 공공 API를 직접 호출하지 않고 이 DB만 조회한다.
 
 ## 1. 사전 준비
@@ -49,7 +50,7 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 ## 4. 테스트
 
 ```bash
-./gradlew test    # 단위 26 + 통합 11 (Docker Desktop 필수)
+./gradlew test    # 단위 36 + 통합 22 = 58개 (Docker Desktop 필수)
 ```
 
 | 테스트 | 내용 |
@@ -58,8 +59,11 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 | `ApiResponseParserTest` | 실제 응답 3종, item 1개/0개, XML·오류 코드 |
 | `CoverageMergerTest` | 납입면제 각주가 사망보험금 조건과 분리되는지 (실제 응답) |
 | `IngestPlannerTest` | 매핑·제외·중복·누락·버전 검증, 165,350원 |
+| `InsuranceAgeTest` | 보험나이 (약관 제23조② 예시·경계값·윤년) |
+| `PremiumCalculatorTest` | 월 보험료 정수 계산, 단위 배수 검증 |
 | `IngestServiceIntegrationTest` | Testcontainers PostgreSQL에서 전체 적재 2회 → 행 수 동일, 실패 시 롤백 + 원문 보관 |
 | `SanityCheckIntegrationTest` | seed 복원 후 `checks/` 상식 검증 3종이 위반 0행인지 |
+| `ProductApiIntegrationTest` | seed 위에서 API 3개: 목록·상세·quote 정상/멱등/버전 고정 + 실패 응답 코드 |
 
 ### 맥(Apple Silicon)에서 통합 테스트가 Docker를 못 찾을 때
 
@@ -88,7 +92,49 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 
 위반이 나오면 데이터를 고치지 말고 그대로 보고할 것 (실제 상품 특성일 수 있음 → 약관 확인 대상).
 
-## 6. 마이그레이션
+## 6. 상품 API (F1 조회 — 비로그인 공개)
+
+앱 기동: `./gradlew bootRun` (DB 필요). Swagger UI: **http://localhost:8080/swagger-ui/index.html**
+
+| Method | Endpoint | 내용 |
+|---|---|---|
+| GET | `/api/products` | 오늘(업무 날짜) 유효 버전이 있는 상품 목록. `subscribable`로 1단계 가입 가능 구분 |
+| GET | `/api/products/{code}` | 상세: 버전, 기준단위금액, 가입금액 범위, 성별 가입나이 범위, 선택 조합, 보장 문단 |
+| GET | `/api/products/{code}/quote` | 보험료 계산. 파라미터: `birthDate`(YYYY-MM-DD), `sex`(M\|W), `payTermYears`, `insureTermCode`, `amount`(원) |
+
+- 업무 날짜는 `system_clock.business_date` 기준 (`ClockService`). `LocalDate.now()`를 쓰지 않는다.
+- 가입 처리(BE B)는 같은 `QuoteService`를 호출해 `versionId`·`monthlyPremium`·`insuranceAge`를
+  계약에 그대로 고정한다 → **`docs/quote-contract.md`** 참고.
+
+### 오류 응답
+
+형식: `{ "code": "RATE_NOT_FOUND", "message": "..." }`
+
+| HTTP | code | 언제 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | 필수값 누락, 날짜·형식 오류 |
+| 400 | `AMOUNT_NOT_UNIT_MULTIPLE` | 가입금액이 기준단위금액(1,000만 원) 배수가 아님 |
+| 400 | `AMOUNT_OUT_OF_RANGE` | 가입금액이 설정 범위(1,000만~1억) 밖 |
+| 400 | `BIRTH_DATE_IN_FUTURE` | 생년월일이 계약일 이후 |
+| 404 | `PRODUCT_NOT_FOUND` | 상품코드 없음 |
+| 409 | `NO_EFFECTIVE_VERSION` | 오늘 유효한 상품 버전 없음 |
+| 409 | `PRODUCT_NOT_SUBSCRIBABLE` | 1단계 가입 불가 상품 (비종신 4종) |
+| 409 | `RATE_NOT_FOUND` | 요율표에 조합 없음 (메시지에 나이 범위 힌트 포함) |
+
+### 단순화 (코드 주석과 동일 — 해소되면 양쪽 모두 갱신)
+
+| 항목 | 1단계 처리 | 상태 |
+|---|---|---|
+| 고액계약 할인 | 미반영, 정비례 (`PremiumCalculator` 한 곳) | 기준·비율은 사업방법서 영역. **확인 필요** |
+| 납입주기 | 월납 가정 | 요율 API에 납입주기 필드 없음. **확인 필요** |
+| 가입금액 단위 | 1,000만 원 배수만 허용 | 원 단위 반올림 규정이 약관에 없어 입력에서 차단 (우리 결정) |
+| 가입금액 범위 | 1,000만~1억 (`quote.amount-*-units` 설정) | 사업방법서 미확인. **확인 필요** |
+| 가입 가능 상품 | 종신 4종 (`product.subscribable-codes` 설정) | 비종신은 플러스보험기간 산출방법서 없이 구현 불가 (약관 제20조④, 안건 2) |
+| 가입나이 범위 | 요율표 존재 여부로 판단 | 약관에 최저·최고 나이 없음 |
+| 보험나이 | 약관 제23조② 산식 | 확정. 안건 5에서 추인 예정 |
+| ClockService | 임시 JDBC 구현 (`clock/`) | BE D가 확정하면 교체 |
+
+## 7. 마이그레이션
 
 | 파일 | 내용 |
 |---|---|
@@ -98,11 +144,11 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 
 **이미 적용된 V 파일은 수정하지 않는다.** 바꾸려면 새 V 파일을 추가한다 (체크섬 불일치로 기동 실패).
 
-## 7. 확정된 도메인 사실
+## 8. 확정된 도메인 사실
 
 | 사실 | 근거 / 반영 |
 |---|---|
-| 가입나이: 1종 15~70세, 2종 20~70세 | 0~80세 전체 호출 원문. 0~14세 응답 0건, 71~80세엔 다른 상품군(4102901 등)만 응답 |
+| 가입나이: 1종 15~70세, 2종 **남 20~66세 / 여 20~70세** (성별로 상한이 다름) | 0~80세 전체 호출 원문 + 요율표 성별 집계. 0~14세 응답 0건, 71~80세엔 다른 상품군(4102901 등)만 응답 |
 | `insure_term_code`: `99`=종신, 그 외 = **만기까지 남은 연수** (가입나이 + 코드 = 90 또는 100, 전 행 성립) | 5,352행 전수 검증. "60/70" 고정이 아니라 나이마다 달라짐 |
 | 납입기간은 5종: 10/15/20/30년납 + **80세납**(= 80 − 가입나이) | 실데이터 집계. 비종신 조합은 정확히 10가지(납입 5 × 만기 90/100세) |
 | `전기납`은 하나로OK보험 8종엔 없음 (`is_full_term_pay` 전부 false) | 다른 상품군(4102901)에만 존재, 범위 제외됨 |
@@ -113,7 +159,7 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 | 보장 API는 페이지 분할, `totalCount`가 페이지 크기와 같게 옴 | 덜 찬 페이지가 나올 때까지 반복 |
 | 보험료 API `CTRT_DVSN_NM`(주계약 등) | 주계약만 적재 |
 
-## 8. 확인 필요 (팀 논의 / 약관 원문 대상)
+## 9. 확인 필요 (팀 논의 / 약관 원문 대상)
 
 | 항목 | 현재 처리 |
 |---|---|
