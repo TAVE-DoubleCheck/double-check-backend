@@ -11,6 +11,8 @@ import java.util.List;
  *
  * @param versionId        가입 시점에 고정할 상품 버전 id
  * @param insuranceAge     보험나이 (약관 제23조②, 계약일 = businessDate)
+ * @param payTermYears     실제 적용된 납입년수 (TO_AGE 플랜이면 toAge − 보험나이로 변환된 값)
+ * @param payTermPlan      선택한 납입 플랜. BE B는 payTermYears와 함께 둘 다 계약에 저장
  * @param premiumWonPerUnit 기준단위금액당 월 보험료 (요율표 원본)
  * @param monthlyPremium   월 보험료 = premiumWonPerUnit × (amount ÷ unitAmountWon)
  * @param businessDate     계산에 쓴 업무 날짜 (system_clock)
@@ -23,6 +25,7 @@ public record QuoteResult(
         int insuranceAge,
         Sex sex,
         int payTermYears,
+        PayTermPlan payTermPlan,
         boolean isFullTermPay,
         String insureTermCode,
         long amount,

@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,9 +100,9 @@ public class ProductQueryService {
                 new ProductDetailResponse.AmountRange(
                         unitAmountWon * quoteProps.amountMinUnits(), unitAmountWon * quoteProps.amountMaxUnits()),
                 joinAgeRange,
-                rates.findOptions(versionId).stream()
-                        .map(o -> new ProductDetailResponse.OptionDto(
-                                o.payTermYears(), o.isFullTermPay(), o.insureTermCode()))
+                PayTermPlanAssembler.assemble(rates.findPayAgeTuples(versionId)),
+                rates.findDistinctInsureTermCodes(versionId).stream()
+                        .sorted(Comparator.comparingInt(Integer::parseInt))
                         .toList(),
                 INSURE_TERM_NOTE,
                 coverages.findByVersionIdOrderBySourceLineNo(versionId).stream()

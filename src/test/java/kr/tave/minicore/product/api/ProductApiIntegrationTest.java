@@ -1,7 +1,10 @@
 package kr.tave.minicore.product.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.tave.minicore.clock.ClockService;
 import kr.tave.minicore.product.repository.ProductVersionRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +63,12 @@ class ProductApiIntegrationTest {
 
     @Autowired
     ProductVersionRepository versions;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @Autowired
+    ObjectMapper objectMapper;
 
     private static boolean seeded = false;
 
@@ -185,6 +194,109 @@ class ProductApiIntegrationTest {
         mvc.perform(get("/api/products/9999999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    @Test
+    void TO_AGE_80_보험나이30이면_납입년수_50으로_변환() throws Exception {
+        mvc.perform(get("/api/products/4008400/quote")
+                        .param("birthDate", "1996-10-20").param("sex", "M")
+                        .param("payTermPlan", "TO_AGE_80").param("insureTermCode", "99")
+                        .param("amount", "50000000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.insuranceAge").value(30))
+                .andExpect(jsonPath("$.payTermYears").value(50))
+                .andExpect(jsonPath("$.payTermPlan.type").value("TO_AGE"))
+                .andExpect(jsonPath("$.payTermPlan.toAge").value(80));
+    }
+
+    @Test
+    void TO_AGE_80_보험나이65는_15년납과_같은_보험료() throws Exception {
+        assertThat(monthlyPremium("4008400", "1961-10-20", "payTermPlan", "TO_AGE_80"))     // 보험나이 65
+                .isEqualTo(monthlyPremium("4008400", "1961-10-20", "payTermYears", "15"));
+    }
+
+    @Test
+    void TO_AGE_80_보험나이70은_10년납과_같은_보험료() throws Exception {
+        assertThat(monthlyPremium("4008400", "1956-10-20", "payTermPlan", "TO_AGE_80"))     // 보험나이 70
+                .isEqualTo(monthlyPremium("4008400", "1956-10-20", "payTermYears", "10"));
+    }
+
+    private long monthlyPremium(String code, String birthDate, String payParam, String payValue) throws Exception {
+        String body = mvc.perform(get("/api/products/" + code + "/quote")
+                        .param("birthDate", birthDate).param("sex", "M")
+                        .param(payParam, payValue).param("insureTermCode", "99")
+                        .param("amount", "50000000"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).path("monthlyPremium").asLong();
+    }
+
+    @Test
+    void TO_AGE_80_보험나이80은_요율조회_전에_RATE_NOT_FOUND() throws Exception {
+        mvc.perform(get("/api/products/4008400/quote")
+                        .param("birthDate", "1946-10-20").param("sex", "M")     // 보험나이 80
+                        .param("payTermPlan", "TO_AGE_80").param("insureTermCode", "99")
+                        .param("amount", "50000000"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RATE_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("80세납은 80세 미만만 가입 가능"));
+    }
+
+    @Test
+    void TO_AGE_80_2종_남성_보험나이67은_RATE_NOT_FOUND() throws Exception {
+        // 2종 남성 최고 가입나이 66세 → 67세는 요율 없음 (80 − 67 = 13년납 변환까지는 정상)
+        mvc.perform(get("/api/products/4008500/quote")
+                        .param("birthDate", "1959-10-20").param("sex", "M")     // 보험나이 67
+                        .param("payTermPlan", "TO_AGE_80").param("insureTermCode", "99")
+                        .param("amount", "50000000"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RATE_NOT_FOUND"))
+                .andExpect(jsonPath("$.message", containsString("20~66")));
+    }
+
+    @Test
+    void 납입기간_파라미터_둘다_보내거나_둘다_없으면_400() throws Exception {
+        mvc.perform(get("/api/products/4008400/quote")
+                        .param("birthDate", "1996-10-20").param("sex", "M")
+                        .param("payTermYears", "10").param("payTermPlan", "TO_AGE_80")
+                        .param("insureTermCode", "99").param("amount", "50000000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        mvc.perform(get("/api/products/4008400/quote")
+                        .param("birthDate", "1996-10-20").param("sex", "M")
+                        .param("insureTermCode", "99").param("amount", "50000000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void 상세_플랜별_나이범위는_요율표_MIN_MAX와_일치() throws Exception {
+        for (String code : java.util.List.of("4008400", "4008500", "4008700")) {
+            String body = mvc.perform(get("/api/products/" + code))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            JsonNode root = objectMapper.readTree(body);
+            long versionId = root.path("version").path("versionId").asLong();
+            JsonNode plans = root.path("payTermPlans");
+            assertThat(plans.size()).as("%s 플랜 수", code).isGreaterThan(1);
+
+            for (JsonNode plan : plans) {
+                String condition = "FIXED_YEARS".equals(plan.path("type").asText())
+                        ? "pay_term_years = " + plan.path("years").asInt()
+                        : "join_age + pay_term_years = " + plan.path("toAge").asInt();
+                for (String sex : java.util.List.of("M", "W")) {
+                    var expected = jdbc.queryForMap(
+                            "SELECT min(join_age) mn, max(join_age) mx FROM premium_rate"
+                                    + " WHERE version_id = ? AND sex = ? AND " + condition, versionId, sex);
+                    JsonNode range = plan.path("joinAgeRange").path(sex);
+                    assertThat(range.path("min").asInt())
+                            .as("%s %s %s min", code, plan, sex).isEqualTo(((Number) expected.get("mn")).intValue());
+                    assertThat(range.path("max").asInt())
+                            .as("%s %s %s max", code, plan, sex).isEqualTo(((Number) expected.get("mx")).intValue());
+                }
+            }
+        }
     }
 
     @Test

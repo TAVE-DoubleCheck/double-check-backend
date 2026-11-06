@@ -6,6 +6,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /** GET /api/products/{code} 응답 */
 public record ProductDetailResponse(
         String productCode,
@@ -19,7 +21,9 @@ public record ProductDetailResponse(
         AmountRange amountRange,
         /** 키: "M" / "W" */
         Map<String, AgeRange> joinAgeRange,
-        List<OptionDto> options,
+        /** 요율표에서 유도한 납입 플랜 (PayTermPlanAssembler). 상세 조합 56개 DISTINCT를 대체 */
+        List<PayTermPlanDto> payTermPlans,
+        List<String> insureTermCodes,
         String insureTermNote,
         List<CoverageDto> coverages) {
 
@@ -32,7 +36,9 @@ public record ProductDetailResponse(
     public record AgeRange(int min, int max) {
     }
 
-    public record OptionDto(int payTermYears, boolean isFullTermPay, String insureTermCode) {
+    /** type: FIXED_YEARS(years 사용) | TO_AGE(toAge 사용). joinAgeRange는 성별 키 "M"/"W" */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record PayTermPlanDto(String type, Integer years, Integer toAge, Map<String, AgeRange> joinAgeRange) {
     }
 
     public record CoverageDto(int lineNo, String benefitName, String conditionText, boolean isNote) {

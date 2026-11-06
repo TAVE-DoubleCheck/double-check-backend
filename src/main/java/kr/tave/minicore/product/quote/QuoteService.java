@@ -49,8 +49,14 @@ public class QuoteService {
         this.clock = clock;
     }
 
+    /** 기존 시그니처 (BE B 호환). 납입년수 직접 지정 = FIXED_YEARS 플랜. */
     public QuoteResult quote(String productCode, LocalDate birthDate, Sex sex,
                              int payTermYears, String insureTermCode, long amount) {
+        return quote(productCode, birthDate, sex, PayTermPlan.fixedYears(payTermYears), insureTermCode, amount);
+    }
+
+    public QuoteResult quote(String productCode, LocalDate birthDate, Sex sex,
+                             PayTermPlan plan, String insureTermCode, long amount) {
         // 1. 상품
         products.findById(productCode)
                 .orElseThrow(() -> new ApiException(ErrorCode.PRODUCT_NOT_FOUND,
@@ -83,18 +89,34 @@ public class QuoteService {
         // 5. 보험나이 (계약일 = 업무 날짜)
         int insuranceAge = InsuranceAge.of(birthDate, today);
 
-        // 6. 요율 1행
+        // 6. 납입 플랜 → 납입년수 (TO_AGE는 보험나이가 있어야 변환 가능)
+        int payTermYears = resolvePayTermYears(plan, insuranceAge);
+
+        // 7. 요율 1행
         PremiumRate rate = rates.findById(new PremiumRateId(
                         version.getId(), (short) insuranceAge, sex.code(), (short) payTermYears, insureTermCode))
                 .orElseThrow(() -> rateNotFound(version.getId(), sex, insuranceAge, payTermYears, insureTermCode));
 
-        // 7. 월 보험료
+        // 8. 월 보험료
         long monthlyPremium = PremiumCalculator.monthlyPremium(rate.getPremiumWon(), rate.getUnitAmountWon(), amount);
 
         return new QuoteResult(productCode, version.getId(), version.getEffectiveFrom(),
-                insuranceAge, sex, payTermYears, rate.isFullTermPay(), insureTermCode,
+                insuranceAge, sex, payTermYears, plan, rate.isFullTermPay(), insureTermCode,
                 amount, rate.getUnitAmountWon(), rate.getPremiumWon(), monthlyPremium,
                 today, ASSUMPTIONS);
+    }
+
+    /** TO_AGE 플랜은 납입년수 = toAge − 보험나이. 0 이하면 요율 조회 전에 실패시킨다. */
+    private static int resolvePayTermYears(PayTermPlan plan, int insuranceAge) {
+        if (plan.type() == PayTermPlan.Type.FIXED_YEARS) {
+            return plan.years();
+        }
+        int years = plan.toAge() - insuranceAge;
+        if (years <= 0) {
+            throw new ApiException(ErrorCode.RATE_NOT_FOUND,
+                    plan.toAge() + "세납은 " + plan.toAge() + "세 미만만 가입 가능");
+        }
+        return years;
     }
 
     /** 요율이 없는 이유를 메시지에 담는다: 나이 범위 밖인지, 조합이 없는 건지 */

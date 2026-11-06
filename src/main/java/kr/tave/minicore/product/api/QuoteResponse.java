@@ -1,6 +1,7 @@
 package kr.tave.minicore.product.api;
 
 import kr.tave.minicore.product.domain.Sex;
+import kr.tave.minicore.product.quote.PayTermPlan;
 import kr.tave.minicore.product.quote.QuoteResult;
 
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ public record QuoteResponse(
         int insuranceAge,
         Sex sex,
         int payTermYears,
+        PayTermPlan payTermPlan,
         boolean isFullTermPay,
         String insureTermCode,
         long amount,
@@ -25,8 +27,8 @@ public record QuoteResponse(
 
     public static QuoteResponse from(QuoteResult r) {
         return new QuoteResponse(r.productCode(), r.versionId(), r.effectiveFrom(),
-                r.insuranceAge(), r.sex(), r.payTermYears(), r.isFullTermPay(), r.insureTermCode(),
-                r.amount(), r.unitAmountWon(), r.premiumWonPerUnit(), r.monthlyPremium(),
-                r.businessDate(), r.assumptions());
+                r.insuranceAge(), r.sex(), r.payTermYears(), r.payTermPlan(), r.isFullTermPay(),
+                r.insureTermCode(), r.amount(), r.unitAmountWon(), r.premiumWonPerUnit(),
+                r.monthlyPremium(), r.businessDate(), r.assumptions());
     }
 }
