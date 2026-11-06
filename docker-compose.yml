@@ -1,0 +1,44 @@
+# 미니 보험 코어 - 로컬 개발용 DB
+# 실행:  docker compose up -d
+# 상태:  docker compose ps   /   docker compose logs flyway
+# 초기화(데이터 전부 삭제): docker compose down -v
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: mic-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-insurance}
+      POSTGRES_USER: ${POSTGRES_USER:-insurance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance}
+      TZ: Asia/Seoul
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-insurance} -d ${POSTGRES_DB:-insurance}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Spring 앱이 생기기 전까지 마이그레이션을 적용하는 일회성 컨테이너.
+  # 앱이 생기면 Spring Boot의 Flyway가 같은 폴더(db/migration)를 그대로 사용한다.
+  flyway:
+    image: flyway/flyway:10
+    container_name: mic-flyway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      -url=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-insurance}
+      -user=${POSTGRES_USER:-insurance}
+      -password=${POSTGRES_PASSWORD:-insurance}
+      -locations=filesystem:/flyway/migrations
+      -connectRetries=10
+      migrate
+    volumes:
+      - ./src/main/resources/db/migration:/flyway/migrations:ro
+
+volumes:
+  pgdata:

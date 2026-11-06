@@ -1,0 +1,61 @@
+# .env 값(POSTGRES_*, DATA_GO_KR_SERVICE_KEY)을 그대로 읽는다. 파일이 없으면 기본값 사용.
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  main:
+    # 지금은 적재만 하고 종료하는 앱. 웹 API를 붙일 때 이 줄을 지운다.
+    web-application-type: none
+  datasource:
+    url: jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB:insurance}
+    username: ${POSTGRES_USER:insurance}
+    password: ${POSTGRES_PASSWORD:insurance}
+  flyway:
+    enabled: true
+
+ingest:
+  # 앱 기동 시 적재 실행 여부. product 테이블이 비어 있을 때만 실행하고, force=true면 항상 실행.
+  run-on-startup: true
+  force: false
+  # 코드 호출용 = Decoding 키. URL 인코딩은 코드가 한다.
+  service-key: ${DATA_GO_KR_SERVICE_KEY:}
+  call-interval-ms: 100
+  # 주의: 파라미터 이름은 반드시 "[이름]" 형태로 쓴다. 대괄호가 없으면 Spring이 '_'를 지워 GDS_NM → GDSNM이 된다.
+  # 미리보기 URL에 형식 파라미터가 없고 응답이 JSON이었으므로 비워 둔다
+  common-params: {}
+
+  terms:
+    # 미리보기 요청 URL로 확인 (2026-10-27)
+    url: https://apis.data.go.kr/1721301/KrpostInsuranceTermsView/InsuranceTerms
+    params:
+      "[GDS_NM]": 하나로
+
+  premium:
+    url: https://apis.data.go.kr/1721301/KrpostInsuranceFeeCalculationView/InsuranceFee
+    product-name-query: 하나로
+    # 가입 가능 나이 확인 전이라 넓게 호출. 결과 0건인 나이는 로그에 남는다.
+    age-min: 0
+    age-max: 80
+
+  coverage:
+    # 미리보기 요청 URL로 확인 (2026-10-27). 상세기능 이름은 'Gurantee'(a 빠짐)가 원본 철자. 고치면 호출 실패
+    url: https://apis.data.go.kr/1721301/KrpostInsuranceGuaranteeContentView/InsuranceGuranteeContent
+    # 정식 상품명 부분 검색. numOfRows/pageNo는 코드가 붙인다
+    params:
+      "[INSU_NM]": 하나로
+    page-size: 100
+    max-pages: 50
+
+  # 보장 API는 정식 상품명만 있어 수작업 매핑 (기능명세서 2.2). 비종신 4종은 확인 후 추가.
+  coverage-name-map:
+    "4008300": 무배당 우체국하나로OK보험(해약환급금50%지급형) 2609 1종(일반가입)(종신)
+    "4008400": 무배당 우체국하나로OK보험(표준형) 2609 1종(일반가입)(종신)
+    "4008500": 무배당 우체국하나로OK보험(해약환급금50%지급형) 2609 2종(간편가입)(종신)
+    "4008600": 무배당 우체국하나로OK보험(표준형) 2609 2종(간편가입)(종신)
+    "4008700": 무배당 우체국하나로OK보험(해약환급금50%지급형) 2609 1종(일반가입)(90,100세)
+    "4008800": 무배당 우체국하나로OK보험(표준형) 2609 1종(일반가입)(90,100세)
+    "4008900": 무배당 우체국하나로OK보험(해약환급금50%지급형) 2609 2종(간편가입)(90,100세)
+    "4009000": 무배당 우체국하나로OK보험(표준형) 2609 2종(간편가입)(90,100세)
+
+logging:
+  level:
+    kr.tave.minicore: INFO
