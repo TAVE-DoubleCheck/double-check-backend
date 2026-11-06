@@ -32,9 +32,11 @@ ingest:
   premium:
     url: https://apis.data.go.kr/1721301/KrpostInsuranceFeeCalculationView/InsuranceFee
     product-name-query: 하나로
-    # 가입 가능 나이 확인 전이라 넓게 호출. 결과 0건인 나이는 로그에 남는다.
+    # 확인된 가입나이: 1종 15~70세, 2종 20~70세 (2026-11-06, 0~80세 호출 원문 기준)
+    # - 0~14세: 응답 0건 / 71~80세: 다른 상품군(4102901 등)만 응답
+    # age-min은 0 유지: 하한이 내려가는 상품 개정을 0건 리포트로 감지하기 위함
     age-min: 0
-    age-max: 80
+    age-max: 70
 
   coverage:
     # 미리보기 요청 URL로 확인 (2026-10-27). 상세기능 이름은 'Gurantee'(a 빠짐)가 원본 철자. 고치면 호출 실패
