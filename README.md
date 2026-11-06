@@ -1,27 +1,44 @@
-# 미니 보험 코어
+# 미니 보험 코어 — 상품 데이터 영역 (F1)
 
-## 1. 로컬 DB
+공공데이터포털 우체국보험 API 3종(약관 / 보장내용 / 1회 보험료계산)을 PostgreSQL에 적재한다.
+서비스 코드는 공공 API를 직접 호출하지 않고 이 DB만 조회한다.
+
+## 1. 사전 준비
+
+- **JDK 17 이상** (`java -version`)
+- **Docker Desktop** 실행 중일 것 (DB 기동과 `./gradlew test` 모두 필요)
+
+## 2. 처음 클론했을 때
 
 ```bash
-cp .env.example .env          # DATA_GO_KR_SERVICE_KEY에 Decoding 키 입력
-docker compose up -d          # PostgreSQL 기동 → Flyway가 마이그레이션 적용 후 종료
-docker compose logs flyway    # "Successfully applied N migrations" 확인
+cp .env.example .env          # 직접 적재할 때만 DATA_GO_KR_SERVICE_KEY(Decoding 키) 입력
+docker compose up -d          # PostgreSQL 기동 → Flyway 컨테이너가 마이그레이션 적용 후 종료(정상)
+docker compose logs flyway    # "Successfully applied ..." 확인
 ```
 
 접속: `localhost:5432` / DB `insurance` / 계정 `insurance` / 비밀번호 `insurance` (기본값)
-초기화(데이터 전부 삭제): `docker compose down -v && docker compose up -d`
 
-## 2. 상품 데이터 적재 (F1)
+## 3. 데이터 넣기
 
-필요: JDK 17 이상, Docker Desktop 실행 중
+### A. seed 복원 (기본 — API 키 불필요, CI도 이 방식)
+
+```bash
+docker compose exec -T postgres psql -U insurance -d insurance -v ON_ERROR_STOP=1 -f - < seed/product_seed.sql
+```
+
+- 빈 테이블에만 복원할 것 (중복 복원 시 PK 충돌로 멈추는 것이 정상)
+- 완전 초기화 후 재시도: `docker compose down -v && docker compose up -d` (**로컬 데이터 전부 삭제** 주의)
+- 복원 결과: product 8 / product_version 8 / premium_rate 5,352 / coverage 20
+
+### B. 직접 적재 (선택 — API 키 필요, 일일 호출 한도 주의)
 
 ```bash
 ./gradlew bootRun                              # product가 비어 있으면 적재 후 종료
-./gradlew bootRun --args='--ingest.force=true' # 강제 재적재 (행 수는 그대로여야 함)
+./gradlew bootRun --args='--ingest.force=true' # 강제 재적재 (행 수는 그대로여야 함 = 멱등)
 ```
 
-앱이 기동하면 Flyway가 미적용 마이그레이션(V3)을 먼저 적용하고 적재를 시작한다.
-마지막에 `[적재 리포트]`가 출력되고, 같은 내용이 `ingest_log.message`에 남는다.
+마지막에 `[적재 리포트]`가 출력되고 같은 내용이 `ingest_log.message`에 남는다.
+1회 적재 호출 수: 약관 1 + 보험료 142(나이 0~70 × 성별 2) + 보장 1 ≈ **144회**.
 
 ```
 API 원문 ─▶ raw_api_response (호출마다 저장)
@@ -29,10 +46,10 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
                                        └ 실패 시 DB 변경 없음, ingest_log = FAILED
 ```
 
-## 3. 테스트
+## 4. 테스트
 
 ```bash
-./gradlew test
+./gradlew test    # 단위 26 + 통합 11 (Docker Desktop 필수)
 ```
 
 | 테스트 | 내용 |
@@ -42,8 +59,36 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 | `CoverageMergerTest` | 납입면제 각주가 사망보험금 조건과 분리되는지 (실제 응답) |
 | `IngestPlannerTest` | 매핑·제외·중복·누락·버전 검증, 165,350원 |
 | `IngestServiceIntegrationTest` | Testcontainers PostgreSQL에서 전체 적재 2회 → 행 수 동일, 실패 시 롤백 + 원문 보관 |
+| `SanityCheckIntegrationTest` | seed 복원 후 `checks/` 상식 검증 3종이 위반 0행인지 |
 
-## 4. 마이그레이션
+### 맥(Apple Silicon)에서 통합 테스트가 Docker를 못 찾을 때
+
+- 증상: `ContainerFetchException` ← `Could not find a valid Docker environment`
+- 원인: **Docker Engine 29부터 구형 Docker API(v1.32) 호출을 400으로 거부**한다.
+  Spring Boot 3.5.6이 관리하는 Testcontainers 1.21.3이 v1.32로 호출해서 실패한다.
+- 해결: `build.gradle`의 `ext['testcontainers.version'] = '1.21.4'` (이미 적용됨).
+  그래도 실패하면 ① Docker Desktop이 실행 중인지, ② `docker version`의 Server 응답이 나오는지 확인.
+
+## 5. 상식 검증 (checks/)
+
+적재된 요율이 보험 원리에 맞는지 확인하는 SQL. 전처리 실수·컬럼 밀림을 잡는 장치다.
+SELECT만 사용하므로 읽기 전용 계정으로 그대로 실행 가능. **결과 0행 = 통과**
+(위반이 있으면 위반 행을, 비교 쌍이 아예 없으면 `NO_PAIRS` 행을 반환한다).
+
+```bash
+docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_refund50_lt_standard.sql
+```
+
+| 파일 | 검증 | 2026-11-06 결과 (5,352행) |
+|---|---|---|
+| `00_product_class.sql` | 형/종 분류 규칙 정의 (상품명 파싱 — 01~03의 CTE와 동일해야 함) | — |
+| `01_refund50_lt_standard.sql` | 해약환급금50%형 < 표준형 | 쌍 2,676 / 위반 0 |
+| `02_simplified_gt_general.sql` | 2종(간편가입) > 1종(일반가입) | 쌍 2,460 / 위반 0 |
+| `03_longer_pay_term_cheaper.sql` | 납입기간 길수록 월 보험료 감소 | 쌍 9,516 / 위반 0 |
+
+위반이 나오면 데이터를 고치지 말고 그대로 보고할 것 (실제 상품 특성일 수 있음 → 약관 확인 대상).
+
+## 6. 마이그레이션
 
 | 파일 | 내용 |
 |---|---|
@@ -53,25 +98,28 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 
 **이미 적용된 V 파일은 수정하지 않는다.** 바꾸려면 새 V 파일을 추가한다 (체크섬 불일치로 기동 실패).
 
-## 5. 실제 응답에서 확인된 사실 (2026-10-27)
+## 7. 확정된 도메인 사실
 
-| 사실 | 반영 |
+| 사실 | 근거 / 반영 |
 |---|---|
-| 약관코드 = "'P' + 상품코드 앞 6자리" 규칙이 **틀림** (4008300 → 실제 `P400083`, 규칙상 `P400830`) | 약관 URL의 `p` 값을 그대로 사용. 규칙 검증 제거 |
-| 보장 API의 납입면제 문구는 급부명 없이 사망보험금 아래 `*` 각주로 옴 | 문단 단위 저장, `is_note` 표시 (V3) |
-| 보장 API는 페이지가 나뉨, `totalCount`가 페이지 크기와 같게 옴 | 덜 찬 페이지가 나올 때까지 반복 |
-| 보장 API에도 적용시작일이 있음 | 보장 문단은 적용시작일로 버전에 정확히 연결 |
-| 보험료 API에 `CTRT_DVSN_NM`(주계약 등) 필드 | 주계약만 적재 |
-| 0세 가입 상품 존재 (`(무)안전벨트`) | 나이 범위 0~80 호출, 0건 나이는 리포트 |
+| 가입나이: 1종 15~70세, 2종 20~70세 | 0~80세 전체 호출 원문. 0~14세 응답 0건, 71~80세엔 다른 상품군(4102901 등)만 응답 |
+| `insure_term_code`: `99`=종신, 그 외 = **만기까지 남은 연수** (가입나이 + 코드 = 90 또는 100, 전 행 성립) | 5,352행 전수 검증. "60/70" 고정이 아니라 나이마다 달라짐 |
+| 납입기간은 5종: 10/15/20/30년납 + **80세납**(= 80 − 가입나이) | 실데이터 집계. 비종신 조합은 정확히 10가지(납입 5 × 만기 90/100세) |
+| `전기납`은 하나로OK보험 8종엔 없음 (`is_full_term_pay` 전부 false) | 다른 상품군(4102901)에만 존재, 범위 제외됨 |
+| coverage 20문단 = 종신 4종×2 + 비종신 4종×3 | 비종신에만 `플러스사망보험금` 문단 추가 |
+| 보험료 상식 관계(50%<표준, 2종>1종, 납입기간↑→월보험료↓) 위반 0건 | `checks/` 참조 |
+| 약관코드 = "'P'+상품코드 앞 6자리" 규칙 **틀림** (4008300 → 실제 `P400083`) | 약관 URL의 `p` 값을 그대로 사용 |
+| 보장 API 납입면제 문구는 급부명 없이 `*` 각주로 옴 | 문단 단위 저장, `is_note` 표시 (V3) |
+| 보장 API는 페이지 분할, `totalCount`가 페이지 크기와 같게 옴 | 덜 찬 페이지가 나올 때까지 반복 |
+| 보험료 API `CTRT_DVSN_NM`(주계약 등) | 주계약만 적재 |
 
-## 6. 가정과 확인 필요
+## 8. 확인 필요 (팀 논의 / 약관 원문 대상)
 
 | 항목 | 현재 처리 |
 |---|---|
+| `system_clock` 초기값이 UTC 기준 날짜로 들어감 (KST 새벽에 마이그레이션하면 전날짜) | 현상 보고만. 업무 날짜 기준(KST 여부)은 팀 확정 필요 |
+| **플러스보험기간 / 플러스사망보험금**의 의미 | API 문구는 "플러스보험기간 중 사망하였을 때"뿐 → 약관 원문 확인 필요 |
 | **가정:** 보험료 API에 적용기간이 없음 | 적재 시점(system_clock) 기준 유효 버전의 요율로 저장 |
-| 확인 완료: 상세기능 경로·파라미터 | 약관 `/InsuranceTerms?GDS_NM=`, 보장 `/InsuranceGuranteeContent?INSU_NM=&numOfRows=&pageNo=` (철자 원본 그대로), 보험료 `/InsuranceFee`. 형식 파라미터 없이 JSON |
-| 확인 필요: 보험기간 60·70의 의미 | `insure_term_code`에 원본 그대로 저장 |
-| 확인 필요: 비종신 4종의 보장 API 정식 상품명 | 리포트의 "매핑 없는 보장 상품명"을 보고 `coverage-name-map`에 추가 |
-| 확인 필요: 약관 URL의 `d` 파라미터 | 조회일로 보임. 원본 그대로 저장 |
+| 약관 URL의 `d` 파라미터 | 조회일로 보임. 원본 그대로 저장 |
 
 설정에서 API 파라미터 이름은 `"[GDS_NM]"`처럼 대괄호로 감싼다. 대괄호가 없으면 Spring이 `_`를 지운다.
