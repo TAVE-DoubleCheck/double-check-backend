@@ -2,15 +2,26 @@
 spring:
   config:
     import: optional:file:.env[.properties]
-  main:
-    # 지금은 적재만 하고 종료하는 앱. 웹 API를 붙일 때 이 줄을 지운다.
-    web-application-type: none
   datasource:
     url: jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB:insurance}
     username: ${POSTGRES_USER:insurance}
     password: ${POSTGRES_PASSWORD:insurance}
   flyway:
     enabled: true
+  jpa:
+    # 엔티티는 기존 테이블에 맞추기만 한다. 스키마 생성·변경은 Flyway 전용.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+product:
+  # 1단계 가입 허용 = 종신 4종 (설계 리뷰 안건 2: 비종신은 플러스보험기간 산출방법서 확인 전 가입 불가)
+  subscribable-codes: ["4008300", "4008400", "4008500", "4008600"]
+
+quote:
+  # 가입금액 하한·상한 = 기준단위(1,000만 원) 배수. ※ 단순화·확인 필요(사업방법서)
+  amount-min-units: 1
+  amount-max-units: 10
 
 ingest:
   # 앱 기동 시 적재 실행 여부. product 테이블이 비어 있을 때만 실행하고, force=true면 항상 실행.
