@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 /**
@@ -115,7 +116,9 @@ class IngestServiceIntegrationTest {
 
     @Test
     void 검증에_실패하면_데이터는_그대로이고_로그는_FAILED_원문은_보관() {
-        when(client.get(anyString(), anyString(), anyMap())).thenAnswer(inv -> {
+        // when(client.get(...))으로 재스터빙하면 @BeforeEach의 기존 답변이 실행돼
+        // 빈 URL로 IllegalArgumentException이 난다 → doAnswer 문법으로 교체
+        doAnswer(inv -> {
             String url = inv.getArgument(0);
             if (url.contains("TermsView")) {
                 return Fixtures.read("terms_hanaro_real.json");
@@ -124,7 +127,7 @@ class IngestServiceIntegrationTest {
                 return Fixtures.EMPTY_RESPONSE;   // 약관 상품의 보험료가 하나도 없음 → 검증 실패
             }
             return Fixtures.read("coverage_page1_real.json");
-        });
+        }).when(client).get(anyString(), anyString(), anyMap());
 
         assertThatThrownBy(() -> service.run()).isInstanceOf(IngestPlanner.IngestValidationException.class);
 

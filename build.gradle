@@ -17,6 +17,11 @@ repositories {
     mavenCentral()
 }
 
+// Docker Engine 29부터 구형 Docker API(v1.32) 호출을 400으로 거부한다.
+// Spring Boot 3.5.6이 관리하는 Testcontainers 1.21.3은 v1.32로 호출해
+// "Could not find a valid Docker environment"로 실패 → Engine 29를 지원하는 1.21.4로 올린다.
+ext['testcontainers.version'] = '1.21.4'
+
 dependencies {
     // 현재 단계: 적재 배치만. 웹 API는 팀 확정 후 spring-boot-starter-web 추가
     implementation 'org.springframework.boot:spring-boot-starter'
