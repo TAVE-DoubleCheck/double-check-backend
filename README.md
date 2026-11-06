@@ -99,8 +99,19 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 | Method | Endpoint | 내용 |
 |---|---|---|
 | GET | `/api/products` | 오늘(업무 날짜) 유효 버전이 있는 상품 목록. `subscribable`로 1단계 가입 가능 구분 |
-| GET | `/api/products/{code}` | 상세: 버전, 기준단위금액, 가입금액 범위, 성별 가입나이 범위, 선택 조합, 보장 문단 |
-| GET | `/api/products/{code}/quote` | 보험료 계산. 파라미터: `birthDate`(YYYY-MM-DD), `sex`(M\|W), `payTermYears`, `insureTermCode`, `amount`(원) |
+| GET | `/api/products/{code}` | 상세: 버전, 기준단위금액, 가입금액 범위, 성별 가입나이 범위, 납입 플랜(`payTermPlans`), 보장 문단 |
+| GET | `/api/products/{code}/quote` | 보험료 계산. 파라미터: `birthDate`(YYYY-MM-DD), `sex`(M\|W), `insureTermCode`, `amount`(원), 그리고 **`payTermYears` 또는 `payTermPlan` 중 정확히 하나** (`FIXED_YEARS_<년수>` \| `TO_AGE_<나이>`, 예: `TO_AGE_80`) |
+
+### 납입 플랜 (payTermPlans)
+
+요율표의 납입기간 DISTINCT(종신 기준 56개)를 그대로 주는 대신, 요율표에서 유도한 플랜으로 묶어 준다:
+`FIXED_YEARS`(10/15/20/30년납) + `TO_AGE`(toAge 80). 각 플랜에 성별별 가입 가능 보험나이 범위 포함.
+
+- **"80세납"은 원본 표기가 아니다.** 원본 `PYMT_TRM_S10`은 `"N년"`(과 타 상품군의 `"전기납"`)뿐이고,
+  one-off 납입년수들이 전부 **N = 80 − 가입나이** 관계를 만족해 `TO_AGE(80)`으로 유도한 것이다
+  (유도 로직·안전장치: `PayTermPlanAssembler`. 만기 나이가 하나로 수렴하지 않으면 묶지 않음).
+- quote에서 `payTermPlan=TO_AGE_80`을 보내면 서버가 `80 − 보험나이`로 납입년수를 변환한다.
+  보험나이 80세 이상이면 요율 조회 전에 `RATE_NOT_FOUND`.
 
 - 업무 날짜는 `system_clock.business_date` 기준 (`ClockService`). `LocalDate.now()`를 쓰지 않는다.
 - 가입 처리(BE B)는 같은 `QuoteService`를 호출해 `versionId`·`monthlyPremium`·`insuranceAge`를
@@ -150,7 +161,8 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 |---|---|
 | 가입나이: 1종 15~70세, 2종 **남 20~66세 / 여 20~70세** (성별로 상한이 다름) | 0~80세 전체 호출 원문 + 요율표 성별 집계. 0~14세 응답 0건, 71~80세엔 다른 상품군(4102901 등)만 응답 |
 | `insure_term_code`: `99`=종신, 그 외 = **만기까지 남은 연수** (가입나이 + 코드 = 90 또는 100, 전 행 성립) | 5,352행 전수 검증. "60/70" 고정이 아니라 나이마다 달라짐 |
-| 납입기간은 5종: 10/15/20/30년납 + **80세납**(= 80 − 가입나이) | 실데이터 집계. 비종신 조합은 정확히 10가지(납입 5 × 만기 90/100세) |
+| 납입기간은 5개 플랜: 10/15/20/30년납 + 80세납. 단 **"80세납"은 원본 표기가 아니라 "N년 = 80 − 가입나이" 관계로 유도한 라벨** (원본 값은 "N년"뿐, 우리 8종에 전기납 없음) | 원본 5,352행 = 적재 5,352행 1:1 확인(중복 키 0). 납입 종료 나이 ≤ 80이 전 상품 성립 |
+| 2종 남성 55~66세는 80세납(TO_AGE_80) 불가 — 플랜별 범위도 성별로 다름 | 요율표 집계 (2종 M의 TO_AGE_80 범위 20~54세, W는 20~70세) |
 | `전기납`은 하나로OK보험 8종엔 없음 (`is_full_term_pay` 전부 false) | 다른 상품군(4102901)에만 존재, 범위 제외됨 |
 | coverage 20문단 = 종신 4종×2 + 비종신 4종×3 | 비종신에만 `플러스사망보험금` 문단 추가 |
 | 보험료 상식 관계(50%<표준, 2종>1종, 납입기간↑→월보험료↓) 위반 0건 | `checks/` 참조 |

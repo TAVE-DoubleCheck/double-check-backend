@@ -5,6 +5,7 @@
 ## 호출
 
 ```java
+// 방식 1: 납입년수 직접 지정 (= FIXED_YEARS 플랜)
 QuoteResult quote = quoteService.quote(
         productCode,     // 예: "4008400"
         birthDate,       // 가입자 생년월일 (LocalDate)
@@ -12,6 +13,13 @@ QuoteResult quote = quoteService.quote(
         payTermYears,    // 납입기간 (년). '전기납'은 하나로OK 8종에 없음
         insureTermCode,  // "99"=종신. 1단계 가입 상품은 종신 4종이므로 항상 "99"
         amount);         // 가입금액 (원). 1,000만 원 배수, 1,000만~1억
+
+// 방식 2: 납입 플랜 지정. TO_AGE(80) = "80세납" — 서버가 80 − 보험나이로 년수 변환
+QuoteResult quote = quoteService.quote(
+        productCode, birthDate, Sex.M,
+        PayTermPlan.toAge(80),            // 또는 PayTermPlan.fixedYears(10)
+        insureTermCode, amount);
+// 보험나이 ≥ 80이면 요율 조회 전에 RATE_NOT_FOUND ("80세납은 80세 미만만 가입 가능")
 ```
 
 - 읽기 전용 트랜잭션. 쓰기 없음. 같은 입력 + 같은 업무 날짜면 항상 같은 결과(결정적).
@@ -29,7 +37,8 @@ QuoteResult quote = quoteService.quote(
 | `effectiveFrom` | 그 버전의 적용 시작일 | 참고용 |
 | `insuranceAge` | 보험나이 (약관 제23조②, 계약일 기준) | ✔ |
 | `sex` | 성별 | ✔ |
-| `payTermYears` | 납입기간 (년) | ✔ |
+| `payTermYears` | **실제 적용된** 납입기간 (년). TO_AGE 플랜이면 toAge − 보험나이로 변환된 값 | ✔ **필수** |
+| `payTermPlan` | 선택한 납입 플랜 (type: FIXED_YEARS → years / TO_AGE → toAge) | ✔ **필수** |
 | `isFullTermPay` | 원본이 전기납이었는지 (8종에선 항상 false) | ✔ |
 | `insureTermCode` | 보험기간 코드 원본 ("99"=종신) | ✔ |
 | `amount` | 가입금액 (원) | ✔ |
@@ -42,6 +51,9 @@ QuoteResult quote = quoteService.quote(
 ## 반드시 지킬 것
 
 **가입 시 `versionId`·`monthlyPremium`·`insuranceAge`를 그대로 계약에 저장하고 다시 계산하지 말 것.**
+
+**`payTermPlan`과 `payTermYears`는 둘 다 계약에 저장할 것.** `payTermYears`는 보험나이에 따라
+변환된 결과값이라(예: TO_AGE 80, 보험나이 30세 → 50년) 플랜 정보가 없으면 원래 선택을 복원할 수 없다.
 
 - 이유: 요율·상품 버전이 나중에 바뀌어도 기존 계약이 변하면 안 된다 (가입 시점 상품 버전 고정).
   재계산하면 "미리보기 금액 ≠ 청구 금액"이 생길 수 있다.
