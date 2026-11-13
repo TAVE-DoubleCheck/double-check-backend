@@ -26,6 +26,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'       // 상품 API + RestClient(적재)
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'      // 적재 Writer·ClockService (팀 기준: 적재만 JdbcTemplate)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'  // 도메인 조회 (팀 기준: 도메인은 JPA)
+    // 요청 본문 검증(@Valid, @NotNull 등). Boot 2.3부터 web starter에 포함되지 않아 따로 추가해야 검증이 실제로 돈다
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'

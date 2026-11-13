@@ -15,7 +15,10 @@ public enum ErrorCode {
     RATE_NOT_FOUND(HttpStatus.CONFLICT),
     AMOUNT_NOT_UNIT_MULTIPLE(HttpStatus.BAD_REQUEST),
     AMOUNT_OUT_OF_RANGE(HttpStatus.BAD_REQUEST),
-    BIRTH_DATE_IN_FUTURE(HttpStatus.BAD_REQUEST);
+    BIRTH_DATE_IN_FUTURE(HttpStatus.BAD_REQUEST),
+
+    // 지급 (API v0.4 9장에서 확정): 이미 지급된 건을 다시 실행하면 409. 화면은 회색 안내로 표시
+    PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT);
 
     private final HttpStatus status;
 
