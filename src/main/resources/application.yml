@@ -8,12 +8,6 @@ spring:
     password: ${POSTGRES_PASSWORD:insurance}
   flyway:
     enabled: true
-  # 파일 업로드 한도 (청구 서류 PDF: 10MB 이하, API v0.4 7장).
-  # 설정이 없으면 Spring Boot 기본값(파일 1개 1MB)이 적용돼 1MB 넘는 PDF가 거절된다.
-  servlet:
-    multipart:
-      max-file-size: 10MB      # 파일 1개 최대
-      max-request-size: 11MB   # 요청 전체 최대 (파일 + docType 등 다른 값 여유분)
   jpa:
     # 엔티티는 기존 테이블에 맞추기만 한다. 스키마 생성·변경은 Flyway 전용.
     hibernate:
