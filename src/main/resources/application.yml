@@ -1,3 +1,6 @@
+server:
+  port: ${PORT:8080}
+
 # .env 값(POSTGRES_*, DATA_GO_KR_SERVICE_KEY)을 그대로 읽는다. 파일이 없으면 기본값 사용.
 spring:
   config:
