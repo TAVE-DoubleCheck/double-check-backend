@@ -123,6 +123,7 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 
 | HTTP | code | 언제 |
 |---|---|---|
+| 401 | `UNAUTHORIZED` | 시스템 날짜 조회 시 로그인 인증 정보 없음 |
 | 400 | `VALIDATION_ERROR` | 필수값 누락, 날짜·형식 오류 |
 | 400 | `AMOUNT_NOT_UNIT_MULTIPLE` | 가입금액이 기준단위금액(1,000만 원) 배수가 아님 |
 | 400 | `AMOUNT_OUT_OF_RANGE` | 가입금액이 설정 범위(1,000만~1억) 밖 |
@@ -144,6 +145,13 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 | 가입나이 범위 | 요율표 존재 여부로 판단 | 약관에 최저·최고 나이 없음 |
 | 보험나이 | 약관 제23조② 산식 | 확정. 안건 5에서 추인 예정 |
 | ClockService | 임시 JDBC 구현 (`clock/`) | BE D가 확정하면 교체 |
+
+## 시스템 날짜 API
+
+`GET /api/clock`은 `ClockService`를 통해 DB의 업무 날짜를 `{ "businessDate": "YYYY-MM-DD" }`로 반환한다.
+로그인한 고객과 직원 모두 사용할 수 있으며, 미인증 요청은 401이다.
+현재 브랜치에는 JWT 인증 모듈이 없어 인증 모듈 연동 전에는 실제 요청이 401을 반환한다.
+응답 형식과 인증 연동 방법은 [시스템 날짜 API](docs/clock-api.md)를 참고한다.
 
 ## 7. 마이그레이션
 
