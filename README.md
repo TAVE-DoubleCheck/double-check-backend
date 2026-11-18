@@ -153,6 +153,13 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 현재 브랜치에는 JWT 인증 모듈이 없어 인증 모듈 연동 전에는 실제 요청이 401을 반환한다.
 응답 형식과 인증 연동 방법은 [시스템 날짜 API](docs/clock-api.md)를 참고한다.
 
+## 서버·DB 상태 확인
+
+`GET /actuator/health`는 로그인 없이 서버와 DB 연결 상태를 확인한다.
+정상이면 HTTP 200과 `{"status":"UP"}`, DB 연결 실패이면 HTTP 503과 `{"status":"DOWN"}`을 반환한다.
+DB 주소나 오류 상세는 공개하지 않는다. Render의 Health Check Path에 `/actuator/health`를 지정한다.
+설정과 검증 방법은 [헬스 체크 API](docs/health-api.md)를 참고한다.
+
 ## 7. 마이그레이션
 
 | 파일 | 내용 |

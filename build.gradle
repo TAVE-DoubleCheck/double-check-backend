@@ -23,6 +23,7 @@ repositories {
 ext['testcontainers.version'] = '1.21.4'
 
 dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-web'       // 상품 API + RestClient(적재)
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'      // 적재 Writer·ClockService (팀 기준: 적재만 JdbcTemplate)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'  // 도메인 조회 (팀 기준: 도메인은 JPA)
