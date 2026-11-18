@@ -153,6 +153,13 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 현재 브랜치에는 JWT 인증 모듈이 없어 인증 모듈 연동 전에는 실제 요청이 401을 반환한다.
 응답 형식과 인증 연동 방법은 [시스템 날짜 API](docs/clock-api.md)를 참고한다.
 
+## 루트 경로
+
+로컬 또는 배포 서버의 루트 주소(`/`)에 접속하면 HTTP 302로 `/swagger-ui/index.html`로 이동한다.
+리다이렉트는 `GET /`에만 적용하며 상품 API 및 `/actuator/health` 경로는 변경하지 않는다.
+Render Health Check Path는 루트가 아닌 `/actuator/health`로 유지한다.
+추후 인증 모듈 도입 시 `/`, `/swagger-ui/**`, `/v3/api-docs/**`의 공개 접근을 허용해야 한다.
+
 ## 서버·DB 상태 확인
 
 `GET /actuator/health`는 로그인 없이 서버와 DB 연결 상태를 확인한다.
