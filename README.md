@@ -25,11 +25,13 @@ docker compose logs flyway    # "Successfully applied ..." 확인
 
 ```bash
 docker compose exec -T postgres psql -U insurance -d insurance -v ON_ERROR_STOP=1 -f - < seed/product_seed.sql
+docker compose exec -T postgres psql -U insurance -d insurance -v ON_ERROR_STOP=1 -f - < seed/reference_seed.sql  # product_seed 다음에 (product FK)
 ```
 
 - 빈 테이블에만 복원할 것 (중복 복원 시 PK 충돌로 멈추는 것이 정상)
 - 완전 초기화 후 재시도: `docker compose down -v && docker compose up -d` (**로컬 데이터 전부 삭제** 주의)
 - 복원 결과: product 8 / product_version 8 / premium_rate 5,352 / coverage 20
+- reference_seed 복원 결과: disclosed_rate 90 / loan_rate_spread 1 / surrender_example_set 4 / surrender_example 36 / policy_clause 16
 
 ### B. 직접 적재 (선택 — API 키 필요, 일일 호출 한도 주의)
 
@@ -62,7 +64,7 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 | `InsuranceAgeTest` | 보험나이 (약관 제23조② 예시·경계값·윤년) |
 | `PremiumCalculatorTest` | 월 보험료 정수 계산, 단위 배수 검증 |
 | `IngestServiceIntegrationTest` | Testcontainers PostgreSQL에서 전체 적재 2회 → 행 수 동일, 실패 시 롤백 + 원문 보관 |
-| `SanityCheckIntegrationTest` | seed 복원 후 `checks/` 상식 검증 3종이 위반 0행인지 |
+| `SanityCheckIntegrationTest` | seed(product + reference) 복원 후 `checks/` 검증 5종이 위반 0행인지 |
 | `ProductApiIntegrationTest` | seed 위에서 API 3개: 목록·상세·quote 정상/멱등/버전 고정 + 실패 응답 코드 |
 
 ### 맥(Apple Silicon)에서 통합 테스트가 Docker를 못 찾을 때
@@ -83,12 +85,16 @@ SELECT만 사용하므로 읽기 전용 계정으로 그대로 실행 가능. **
 docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_refund50_lt_standard.sql
 ```
 
-| 파일 | 검증 | 2026-11-06 결과 (5,352행) |
+| 파일 | 검증 | 결과 |
 |---|---|---|
 | `00_product_class.sql` | 형/종 분류 규칙 정의 (상품명 파싱 — 01~03의 CTE와 동일해야 함) | — |
 | `01_refund50_lt_standard.sql` | 해약환급금50%형 < 표준형 | 쌍 2,676 / 위반 0 |
 | `02_simplified_gt_general.sql` | 2종(간편가입) > 1종(일반가입) | 쌍 2,460 / 위반 0 |
 | `03_longer_pay_term_cheaper.sql` | 납입기간 길수록 월 보험료 감소 | 쌍 9,516 / 위반 0 |
+| `04_surrender_half_rule.sql` | 해약환급금 예시표가 약관 50% 규칙을 지키는지 (납입 중 50%형 = 표준형의 50%, 10원 이하 차이 허용 / 납입 완료 후 동일) | 쌍 18 / 위반 0 |
+| `05_example_premium_matches_rate.sql` | 상품요약서 예시 보험료 = API로 적재한 요율표 보험료 (공시 문서와 API 데이터 일치) | 상품 4 / 위반 0 |
+
+결과 기준: 01~03은 2026-11-06 적재본(premium_rate 5,352행), 04~05는 2026-11-23 reference_seed
 
 위반이 나오면 데이터를 고치지 말고 그대로 보고할 것 (실제 상품 특성일 수 있음 → 약관 확인 대상).
 

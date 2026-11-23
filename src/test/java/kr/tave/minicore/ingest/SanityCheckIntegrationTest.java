@@ -54,6 +54,16 @@ class SanityCheckIntegrationTest {
         assertThat(result.getExitCode())
                 .as("seed 복원 실패: %s", result.getStderr())
                 .isZero();
+
+        // 공시 문서 기반 참조 데이터 (product FK가 있어 product_seed 뒤에 복원)
+        postgres.copyFileToContainer(
+                MountableFile.forHostPath(Path.of("seed/reference_seed.sql")), "/tmp/reference_seed.sql");
+        var refResult = postgres.execInContainer(
+                "psql", "-U", postgres.getUsername(), "-d", postgres.getDatabaseName(),
+                "-v", "ON_ERROR_STOP=1", "-f", "/tmp/reference_seed.sql");
+        assertThat(refResult.getExitCode())
+                .as("reference seed 복원 실패: %s", refResult.getStderr())
+                .isZero();
         seeded = true;
     }
 
@@ -61,7 +71,9 @@ class SanityCheckIntegrationTest {
     @ValueSource(strings = {
             "01_refund50_lt_standard.sql",
             "02_simplified_gt_general.sql",
-            "03_longer_pay_term_cheaper.sql"
+            "03_longer_pay_term_cheaper.sql",
+            "04_surrender_half_rule.sql",
+            "05_example_premium_matches_rate.sql"
     })
     void 상식_검증_SQL은_위반_0행이어야_한다(String file) throws Exception {
         String sql = Files.readString(Path.of("checks", file));
@@ -75,7 +87,8 @@ class SanityCheckIntegrationTest {
 
     /** seed가 비어 있으면 위 검증이 NO_PAIRS로만 실패하므로, 원인 구분용으로 행 수도 못박는다. */
     @ParameterizedTest
-    @ValueSource(strings = {"product", "product_version", "premium_rate", "coverage"})
+    @ValueSource(strings = {"product", "product_version", "premium_rate", "coverage",
+            "disclosed_rate", "loan_rate_spread", "surrender_example", "policy_clause"})
     void seed_복원_후_테이블이_비어_있지_않다(String table) {
         Long count = jdbc.queryForObject("SELECT count(*) FROM " + table, Long.class);
         assertThat(count).as("%s 행 수", table).isPositive();
