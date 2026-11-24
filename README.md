@@ -173,6 +173,13 @@ Render Health Check Path는 루트가 아닌 `/actuator/health`로 유지한다.
 DB 주소나 오류 상세는 공개하지 않는다. Render의 Health Check Path에 `/actuator/health`를 지정한다.
 설정과 검증 방법은 [헬스 체크 API](docs/health-api.md)를 참고한다.
 
+## ledger
+
+V9는 보험료 입금·보험금 출금 ledger와 DB 보호 규칙을 추가한다.
+원본 완료 상태·계약·금액·거래 날짜 일치, 중복 기록 금지, 수정·삭제 금지를 DB에서 검사한다.
+테스트용 TRUNCATE는 허용한다. 서비스 실행 계정 권한 및 후속 LedgerService 연동 기준은
+[ledger 스키마](docs/ledger-schema.md)를 참고한다.
+
 ## 7. 마이그레이션
 
 | 파일 | 내용 |
@@ -180,6 +187,7 @@ DB 주소나 오류 상세는 공개하지 않는다. Render의 Health Check Pat
 | `V1__product_schema.sql` | product, product_version, premium_rate, coverage, ingest_log, raw_api_response |
 | `V2__system_clock.sql` | system_clock (1행, 앞으로만 이동) |
 | `V3__coverage_paragraph.sql` | coverage를 문단 단위로 변경 (source_line_no, is_note) |
+| `V9__ledger_schema.sql` | ledger 및 원본 일치·중복·수정·삭제 방지 규칙 |
 
 **이미 적용된 V 파일은 수정하지 않는다.** 바꾸려면 새 V 파일을 추가한다 (체크섬 불일치로 기동 실패).
 
