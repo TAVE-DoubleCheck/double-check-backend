@@ -186,7 +186,9 @@ DB 주소나 오류 상세는 공개하지 않는다. Render의 Health Check Pat
 
 V9는 보험료 입금·보험금 출금 ledger와 DB 보호 규칙을 추가한다.
 원본 완료 상태·계약·금액·거래 날짜 일치, 중복 기록 금지, 수정·삭제 금지를 DB에서 검사한다.
-테스트용 TRUNCATE는 허용한다. 서비스 실행 계정 권한 및 후속 LedgerService 연동 기준은
+`LedgerService`는 청구서·지급건 ID로 원본을 조회해 기록하며, 중복 요청에는 기존 기록을 반환한다.
+호출자의 트랜잭션이 필수이며, 원본의 완료 처리와 ledger 기록을 함께 커밋·롤백한다.
+별도 HTTP API는 없다. 테스트용 TRUNCATE는 허용한다. 실행 계정 권한 및 서비스 연동 기준은
 [ledger 스키마](docs/ledger-schema.md)를 참고한다.
 
 ## 7. 마이그레이션
