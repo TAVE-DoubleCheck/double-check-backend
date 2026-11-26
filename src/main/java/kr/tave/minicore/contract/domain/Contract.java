@@ -11,6 +11,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import kr.tave.minicore.common.error.ApiException;
 import kr.tave.minicore.common.error.ErrorCode;
+import kr.tave.minicore.product.quote.PayTermPlan;
+import kr.tave.minicore.product.quote.QuoteResult;
 import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.generator.EventType;
@@ -106,6 +108,34 @@ public class Contract {
     private Instant updatedAt;
 
     protected Contract() {
+    }
+
+    /**
+     * 가입 신청 (청약). 서버에서 다시 계산한 QuoteResult를 그대로 복사한다 (docs/quote-contract.md).
+     * 계약일·납입일은 첫 보험료를 낼 때 정해지므로 비워 둔다 (약관 제25조①).
+     */
+    public static Contract apply(long userId, QuoteResult quote, String beneficiaryName,
+                                 BeneficiaryRelation beneficiaryRelation) {
+        Contract c = new Contract();
+        c.userId = userId;
+        c.versionId = quote.versionId();
+        c.sex = quote.sex().code();
+        c.insuranceAge = (short) quote.insuranceAge();
+        c.insuredAmount = quote.amount();
+        c.monthlyPremium = quote.monthlyPremium();
+        PayTermPlan plan = quote.payTermPlan();
+        c.payTermPlanType = plan.type().name();
+        c.payTermPlanValue = (short) (plan.type() == PayTermPlan.Type.FIXED_YEARS
+                ? plan.years().intValue() : plan.toAge().intValue());
+        c.payTermYears = (short) quote.payTermYears();
+        c.fullTermPay = quote.isFullTermPay();
+        c.insureTermCode = quote.insureTermCode();
+        c.appliedOn = quote.businessDate();
+        c.autoDebit = false;
+        c.status = ContractStatus.PENDING;
+        c.beneficiaryName = beneficiaryName;
+        c.beneficiaryRelation = beneficiaryRelation.name();
+        return c;
     }
 
     /**
