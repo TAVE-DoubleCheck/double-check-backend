@@ -27,6 +27,8 @@ public enum ErrorCode {
     // 계약 (BE B). CONTRACT_NOT_FOUND는 청구(BE C)와 같은 이름을 쓴다 (이슈 #8): 없는 계약·내 계약 아님 모두 404
     CONTRACT_NOT_FOUND(HttpStatus.NOT_FOUND),
     INVALID_CONTRACT_STATUS(HttpStatus.CONFLICT),
+    // 가입 시 화면에서 본 상품 버전·월 보험료가 서버 재계산 결과와 다름 → 다시 계산해서 보여 주고 확인받기
+    QUOTE_CHANGED(HttpStatus.CONFLICT),
 
     // 지급 (API v0.4 9장에서 확정): 이미 지급된 건을 다시 실행하면 409. 화면은 회색 안내로 표시
     PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT);

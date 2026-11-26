@@ -68,6 +68,7 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 | `ProductApiIntegrationTest` | seed 위에서 API 3개: 목록·상세·quote 정상/멱등/버전 고정 + 실패 응답 코드 |
 | `JwtProviderTest` | 토큰 발급·검증, 만료·다른 키·내용 변조 거부, 짧은 서명 키 기동 실패 |
 | `AuthApiIntegrationTest` | 회원가입(BCrypt 저장·중복 409·형식 400) → 로그인 → 내 정보, 401·403, 직원 계정 자동 생성, 상품 조회 공개 |
+| `ContractApplyIntegrationTest` | seed 위에서 보험료 계산 → 가입: 계약·이력·1회차 청구서 함께 저장, 80세납 플랜 저장, 보험료 불일치 409(저장 없음), 400·401·403 |
 
 ### 맥(Apple Silicon)에서 통합 테스트가 Docker를 못 찾을 때
 
@@ -135,6 +136,7 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 | 401 | `INVALID_CREDENTIALS` | 로그인 시 이메일 또는 비밀번호가 틀림 (둘을 구분하지 않음) |
 | 403 | `FORBIDDEN` | 고객이 직원 전용 주소(`/api/admin/**`) 호출 |
 | 409 | `EMAIL_ALREADY_EXISTS` | 이미 가입된 이메일 (대소문자 무시) |
+| 409 | `QUOTE_CHANGED` | 가입 신청 시 화면에서 본 상품 버전·월 보험료가 서버 재계산 결과와 다름 |
 | 400 | `VALIDATION_ERROR` | 필수값 누락, 날짜·형식 오류 |
 | 400 | `AMOUNT_NOT_UNIT_MULTIPLE` | 가입금액이 기준단위금액(1,000만 원) 배수가 아님 |
 | 400 | `AMOUNT_OUT_OF_RANGE` | 가입금액이 설정 범위(1,000만~1억) 밖 |
@@ -173,6 +175,15 @@ Swagger에서는 오른쪽 위 **Authorize** 버튼에 토큰을 붙여 넣는�
 
 - 공개 주소: 회원가입·로그인, `GET /api/products/**`, Swagger, `/actuator/health`. 직원 전용: `/api/admin/**`. 그 외는 로그인 필요
 - 직원 계정은 앱 기동 시 자동 생성 (기본 `admin@doublecheck.local` / `admin1234!`, `.env`의 `ADMIN_EMAIL`·`ADMIN_PASSWORD`로 변경)
+
+## 가입 신청 API
+
+| Method | Endpoint | 로그인 | 내용 |
+|---|---|---|---|
+| POST | `/api/contracts` | 고객 | 보험료 계산 결과(`expectedVersionId`·`expectedMonthlyPremium`)와 함께 신청 → 청약(PENDING) 계약 + 1회차 청구서. 201 |
+
+생년월일·성별은 회원 정보를 쓰고, 서버가 보험료를 다시 계산해 화면 값과 다르면 409 `QUOTE_CHANGED`.
+1회차를 낸 날이 계약일 = 보장 시작일. 자세한 건 **`docs/contract-apply.md`**.
 
 ## 시스템 날짜 API
 
