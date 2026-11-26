@@ -5,24 +5,30 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.tave.minicore.auth.security.LoginUser;
 import kr.tave.minicore.contract.service.ContractApplyService;
+import kr.tave.minicore.contract.service.ContractQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.List;
 
-@Tag(name = "계약", description = "가입 신청")
+@Tag(name = "계약", description = "가입 신청·내 계약 조회")
 @RestController
 @RequestMapping("/api/contracts")
 public class ContractController {
 
     private final ContractApplyService applyService;
+    private final ContractQueryService queryService;
 
-    public ContractController(ContractApplyService applyService) {
+    public ContractController(ContractApplyService applyService, ContractQueryService queryService) {
         this.applyService = applyService;
+        this.queryService = queryService;
     }
 
     @Operation(summary = "가입 신청 (고객)",
@@ -33,5 +39,30 @@ public class ContractController {
                                                        @Valid @RequestBody ApplyContractRequest req) {
         ApplyContractResponse res = applyService.apply(me, req);
         return ResponseEntity.created(URI.create("/api/contracts/" + res.contractId())).body(res);
+    }
+
+    @Operation(summary = "내 계약 목록", description = "최근 신청 순. 납입 회차 진행(paidInstallments / totalInstallments) 포함")
+    @GetMapping
+    public List<ContractSummaryResponse> myContracts(@AuthenticationPrincipal LoginUser me) {
+        return queryService.myContracts(me);
+    }
+
+    @Operation(summary = "계약 상세", description = "가입 시점 스냅샷 + 현재 상태 + 다음에 낼 청구서. 남의 계약은 404 (직원은 모두 조회 가능)")
+    @GetMapping("/{contractId}")
+    public ContractDetailResponse detail(@AuthenticationPrincipal LoginUser me, @PathVariable long contractId) {
+        return queryService.detail(me, contractId);
+    }
+
+    @Operation(summary = "계약의 청구서 목록", description = "1회차부터. ISSUED = 납부 대기 / PAID = 납입 완료 / OVERDUE = 미납")
+    @GetMapping("/{contractId}/bills")
+    public List<BillResponse> bills(@AuthenticationPrincipal LoginUser me, @PathVariable long contractId) {
+        return queryService.bills(me, contractId);
+    }
+
+    @Operation(summary = "계약 상태 이력", description = "오래된 순. 가입 신청 → 계약 성립 → … ")
+    @GetMapping("/{contractId}/history")
+    public List<ContractHistoryResponse> history(@AuthenticationPrincipal LoginUser me,
+                                                 @PathVariable long contractId) {
+        return queryService.history(me, contractId);
     }
 }

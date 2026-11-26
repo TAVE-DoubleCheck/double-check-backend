@@ -1,4 +1,4 @@
-# 가입 신청 API (BE B)
+# 계약 API: 가입 신청·조회 (BE B)
 
 소유: BE B. 코드는 `kr.tave.minicore.contract` (`ContractApplyService`, `ContractController`).
 
@@ -78,3 +78,33 @@
 | 1회차를 기다리는 기간 | 신청일 + 30일. 지나면 불성립(VOID) 처리 예정 (매일 작업 LAPSE 단계) | `contract.first-premium-wait-days` |
 | 같은 버튼 두 번 클릭 | 계약 2건 생성 가능 (중복 방지 키 없음) | 화면에서 버튼 잠금. 필요하면 2단계에 `Idempotency-Key` |
 | 자동이체 신청 | 가입 시 받지 않음 (기본 꺼짐). 별도 API로 설정 예정 | — |
+
+## 조회 API
+
+| Method | Endpoint | 내용 |
+| --- | --- | --- |
+| GET | `/api/contracts` | 내 계약 목록 (최근 신청 순) |
+| GET | `/api/contracts/{id}` | 상세 + `nextBill`(아직 안 낸 가장 이른 청구서, 없으면 null) |
+| GET | `/api/contracts/{id}/bills` | 청구서 전체 |
+| GET | `/api/contracts/{id}/history` | 상태 이력. 직원 id는 내보내지 않음 (`actorType`만) |
+
+- 고객은 자기 계약만. 남의 계약 id는 **있어도 404** `CONTRACT_NOT_FOUND` (있다는 사실도 알려 주지 않기, 이슈 #8)
+- 직원(ADMIN)은 청구 심사 등을 위해 모든 계약의 상세·청구서·이력 조회 가능. 목록은 본인 계약만이라 직원은 빈 목록
+- 납입 진행: `paidInstallments`(납부 완료 청구서 수) / `totalInstallments`(납입년수 × 12)
+- 상품명은 계약이 가리키는 상품 버전(`version_id`)으로 찾는다 (가입 시점 버전 고정)
+
+상세 응답 예 (1회차 납부 후):
+
+```json
+{
+  "contractId": 1, "contractNo": "C-000001", "productCode": "4008400", "productName": "(product.short_name 값)",
+  "versionId": 12, "status": "ACTIVE", "insuranceAge": 30, "sex": "M",
+  "insuredAmount": 50000000, "monthlyPremium": 165350,
+  "payTermPlan": { "type": "FIXED_YEARS", "years": 10 }, "payTermYears": 10, "insureTermCode": "99",
+  "appliedOn": "2026-03-10", "contractDate": "2026-03-15", "billingDay": 15, "autoDebit": false,
+  "beneficiaryName": "이수익", "beneficiaryRelation": "SPOUSE",
+  "paidInstallments": 1, "totalInstallments": 120,
+  "nextBill": { "billId": 2, "installmentNo": 2, "dueDate": "2026-04-15", "graceEndDate": "2026-06-30",
+                "amount": 165350, "status": "ISSUED", "paidOn": null, "paidChannel": null }
+}
+```
