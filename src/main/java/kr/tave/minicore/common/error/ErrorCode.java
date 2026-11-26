@@ -4,11 +4,17 @@ import org.springframework.http.HttpStatus;
 
 /**
  * API 공통 오류 코드 (API 표 10장).
- *  400 = 입력 형식 오류 / 404 = 리소스 없음 / 409 = 상태 충돌
+ *  400 = 입력 형식 오류 / 401 = 로그인 필요 / 403 = 권한 없음 / 404 = 리소스 없음 / 409 = 상태 충돌
  */
 public enum ErrorCode {
 
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED),
+
+    // 로그인 (BE B). 이메일이 없을 때와 비밀번호가 틀릴 때 같은 코드를 쓴다 (가입 여부를 알려 주지 않기 위해)
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED),
+    FORBIDDEN(HttpStatus.FORBIDDEN),
+    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT),
+
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST),
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND),
     NO_EFFECTIVE_VERSION(HttpStatus.CONFLICT),
