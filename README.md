@@ -159,6 +159,15 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 현재 브랜치에는 JWT 인증 모듈이 없어 인증 모듈 연동 전에는 실제 요청이 401을 반환한다.
 응답 형식과 인증 연동 방법은 [시스템 날짜 API](docs/clock-api.md)를 참고한다.
 
+## 하루 업무 처리
+
+`DailyWorkService.advanceTo(targetDate)`는 날짜를 하루씩 이동하면서 청구서 발행 → 자동이체 →
+미납·실효 → 만기 → 장부 대사를 순서대로 호출하는 기본 구조이다.
+날짜 변경과 하루 업무를 함께 커밋하며 실패한 날짜는 롤백한다. 동시 날짜 이동은 DB 행 잠금으로 조정한다.
+실제 단계 구현은 별도 작업이며, 미구현 단계가 있으면 날짜 이동을 거부한다.
+아직 외부 날짜 변경 API는 제공하지 않는다. 연결 방법과 트랜잭션 규칙은
+[하루 업무 처리](docs/daily-work.md)를 참고한다.
+
 ## 루트 경로
 
 로컬 또는 배포 서버의 루트 주소(`/`)에 접속하면 HTTP 302로 `/swagger-ui/index.html`로 이동한다.
