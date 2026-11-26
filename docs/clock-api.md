@@ -19,8 +19,8 @@
 
 ## 인증 모듈 연동
 
-이 브랜치에는 아직 로그인 및 JWT 검증 모듈이 없다. API는 Servlet 요청의 인증된
-`Principal`이 있는 경우에만 날짜를 반환한다. 인증 정보가 없으면 HTTP 401을 반환한다.
+로그인 모듈(`docs/auth.md`)이 연결되어 `Authorization: Bearer {accessToken}` 헤더의 JWT를 검증한다.
+토큰이 없거나 만료·위조되면 컨트롤러까지 오지 않고 보안 설정에서 HTTP 401을 반환한다.
 
 ```json
 {
@@ -29,15 +29,12 @@
 }
 ```
 
-`Authorization` 헤더가 있다는 이유만으로 접근을 허용하지 않는다. 인증 모듈 담당자는
-토큰 검증 후 Spring Security 인증 정보를 설정하여 MVC의 `Principal`로 전달해야 한다.
-고객과 직원 모두 접근할 수 있어야 하며, ADMIN 전용으로 제한하지 않는다.
-인증 모듈을 연결하기 전에는 실제 HTTP 요청에 Bearer 토큰을 넣어도 401이 반환된다.
+고객과 직원 모두 접근할 수 있으며, ADMIN 전용으로 제한하지 않는다.
 
 ## 검증
 
 `ClockApiIntegrationTest`는 Testcontainers PostgreSQL과 Flyway를 사용한다.
-인증된 사용자 정보는 MockMvc의 `principal`로 주입하며, 실제 JWT 검증 테스트는 아니다.
+인증은 `JwtProvider`로 발급한 실제 JWT를 헤더에 넣어 확인한다.
 DB 날짜 조회, 조회 시 데이터 유지, 날짜 변경 즉시 반영, 캐시 방지 헤더,
 비로그인 요청 및 검증되지 않은 Bearer 헤더의 401 응답을 확인한다.
 

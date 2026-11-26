@@ -66,6 +66,8 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 | `IngestServiceIntegrationTest` | Testcontainers PostgreSQL에서 전체 적재 2회 → 행 수 동일, 실패 시 롤백 + 원문 보관 |
 | `SanityCheckIntegrationTest` | seed(product + reference) 복원 후 `checks/` 검증 5종이 위반 0행인지 |
 | `ProductApiIntegrationTest` | seed 위에서 API 3개: 목록·상세·quote 정상/멱등/버전 고정 + 실패 응답 코드 |
+| `JwtProviderTest` | 토큰 발급·검증, 만료·다른 키·내용 변조 거부, 짧은 서명 키 기동 실패 |
+| `AuthApiIntegrationTest` | 회원가입(BCrypt 저장·중복 409·형식 400) → 로그인 → 내 정보, 401·403, 직원 계정 자동 생성, 상품 조회 공개 |
 
 ### 맥(Apple Silicon)에서 통합 테스트가 Docker를 못 찾을 때
 
@@ -129,7 +131,10 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 
 | HTTP | code | 언제 |
 |---|---|---|
-| 401 | `UNAUTHORIZED` | 시스템 날짜 조회 시 로그인 인증 정보 없음 |
+| 401 | `UNAUTHORIZED` | 로그인이 필요한 주소에 토큰 없음·만료·위조 |
+| 401 | `INVALID_CREDENTIALS` | 로그인 시 이메일 또는 비밀번호가 틀림 (둘을 구분하지 않음) |
+| 403 | `FORBIDDEN` | 고객이 직원 전용 주소(`/api/admin/**`) 호출 |
+| 409 | `EMAIL_ALREADY_EXISTS` | 이미 가입된 이메일 (대소문자 무시) |
 | 400 | `VALIDATION_ERROR` | 필수값 누락, 날짜·형식 오류 |
 | 400 | `AMOUNT_NOT_UNIT_MULTIPLE` | 가입금액이 기준단위금액(1,000만 원) 배수가 아님 |
 | 400 | `AMOUNT_OUT_OF_RANGE` | 가입금액이 설정 범위(1,000만~1억) 밖 |
@@ -151,6 +156,21 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 | 가입나이 범위 | 요율표 존재 여부로 판단 | 약관에 최저·최고 나이 없음 |
 | 보험나이 | 약관 제23조② 산식 | 확정. 안건 5에서 추인 예정 |
 | ClockService | 임시 JDBC 구현 (`clock/`) | BE D가 확정하면 교체 |
+
+## 로그인 API
+
+JWT 방식. 로그인 응답의 `accessToken`을 요청마다 `Authorization: Bearer {accessToken}` 헤더로 보낸다.
+Swagger에서는 오른쪽 위 **Authorize** 버튼에 토큰을 붙여 넣는다. 자세한 규칙·사용법은 **`docs/auth.md`**.
+
+| Method | Endpoint | 로그인 | 내용 |
+|---|---|---|---|
+| POST | `/api/auth/signup` | 불필요 | 고객 회원가입 (email, password, name, birthDate, sex) → 201 |
+| POST | `/api/auth/login` | 불필요 | 로그인 → `accessToken`, `expiresIn`(초), `user` |
+| POST | `/api/auth/logout` | 필요 | 204. 서버 저장 정보가 없어 프론트가 토큰을 지우면 끝 |
+| GET | `/api/auth/me` | 필요 | 내 정보 |
+
+- 공개 주소: 회원가입·로그인, `GET /api/products/**`, Swagger, `/actuator/health`. 직원 전용: `/api/admin/**`. 그 외는 로그인 필요
+- 직원 계정은 앱 기동 시 자동 생성 (기본 `admin@doublecheck.local` / `admin1234!`, `.env`의 `ADMIN_EMAIL`·`ADMIN_PASSWORD`로 변경)
 
 ## 시스템 날짜 API
 
