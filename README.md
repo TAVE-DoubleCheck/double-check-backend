@@ -135,9 +135,11 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 | 400 | `AMOUNT_OUT_OF_RANGE` | 가입금액이 설정 범위(1,000만~1억) 밖 |
 | 400 | `BIRTH_DATE_IN_FUTURE` | 생년월일이 계약일 이후 |
 | 404 | `PRODUCT_NOT_FOUND` | 상품코드 없음 |
+| 404 | `CONTRACT_NOT_FOUND` | 계약 없음 또는 내 계약이 아님 |
 | 409 | `NO_EFFECTIVE_VERSION` | 오늘 유효한 상품 버전 없음 |
 | 409 | `PRODUCT_NOT_SUBSCRIBABLE` | 1단계 가입 불가 상품 (비종신 4종) |
 | 409 | `RATE_NOT_FOUND` | 요율표에 조합 없음 (메시지에 나이 범위 힌트 포함) |
+| 409 | `INVALID_CONTRACT_STATUS` | 지금 계약 상태에서 할 수 없는 변경 (예: 실효 계약을 납입면제로) → `docs/contract-status.md` |
 
 ### 단순화 (코드 주석과 동일 — 해소되면 양쪽 모두 갱신)
 
