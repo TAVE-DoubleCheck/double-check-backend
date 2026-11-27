@@ -1,7 +1,7 @@
 package kr.tave.minicore.claim.domain;
 
 // 새 파일 (#35): 지급건 (V5 payout). 사망 청구 승인 때 PENDING으로 1건 생성.
-//   지급 실행(PENDING → PAID, 장부 기록)은 다음 이슈에서 추가.
+// 변경 (#38): 지급 완료 markPaid 추가 (장부 기록은 PayoutService가 그 다음에 호출).
 //   중복 지급 방지 1겹: claim_id UNIQUE (청구 1건당 지급건 최대 1개)
 
 import jakarta.persistence.Column;
@@ -60,6 +60,19 @@ public class Payout {
         p.status = PayoutStatus.PENDING;
         p.approvedOn = approvedOn;
         return p;
+    }
+
+    /**
+     * #38: 지급 완료 PENDING → PAID. 지급일·지급자를 함께 채운다 (DB ck_payout_paid).
+     * 호출 전에 행 잠금 + PENDING 확인을 마친 상태여야 한다 (PayoutService).
+     */
+    public void markPaid(LocalDate today, long staffId) {
+        if (status != PayoutStatus.PENDING) { // 서비스에서 먼저 막지만 엔티티도 한 번 더 지킴
+            throw new IllegalStateException("PENDING이 아닌 지급건은 지급할 수 없다: " + id + " " + status);
+        }
+        this.status = PayoutStatus.PAID;
+        this.paidOn = today;
+        this.paidBy = staffId;
     }
 
     public Long getId() {
