@@ -28,6 +28,16 @@ public interface PremiumRateRepository extends JpaRepository<PremiumRate, Premiu
              where r.id.versionId = :versionId and r.id.sex = :sex""")
     AgeRangeView findJoinAgeRange(@Param("versionId") long versionId, @Param("sex") Character sex);
 
+    /** 버전·성별·납입년수의 가입나이 범위 (시뮬레이터: 납입기간별 가입나이 검증, 사업방법서 2.가·나 대응) */
+    @Query("""
+            select min(r.id.joinAge) as min, max(r.id.joinAge) as max
+              from PremiumRate r
+             where r.id.versionId = :versionId and r.id.sex = :sex
+               and r.id.payTermYears = :payTermYears and r.id.insureTermCode = :insureTermCode""")
+    AgeRangeView findJoinAgeRange(@Param("versionId") long versionId, @Param("sex") Character sex,
+                                  @Param("payTermYears") short payTermYears,
+                                  @Param("insureTermCode") String insureTermCode);
+
     /** 버전의 기준단위금액 DISTINCT (현재 데이터는 1,000만 원 1종류여야 한다) */
     @Query("select distinct r.unitAmountWon from PremiumRate r where r.id.versionId = :versionId")
     List<Long> findDistinctUnitAmounts(@Param("versionId") long versionId);
