@@ -49,6 +49,12 @@ public enum ErrorCode {
     PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT),
     PAYOUT_NOT_FOUND(HttpStatus.NOT_FOUND), // #38: 없는 지급건
 
+    // 시뮬레이터 예상 계산 v0 (명세 3장). 400 셋은 입력 자체가 규칙 밖, 404는 조합은 맞지만 요율표 행이 없음
+    PAY_TERM_NOT_SUPPORTED(HttpStatus.BAD_REQUEST),  // v0는 10·15·20·30년납만 (80세납 제외)
+    INVALID_AMOUNT(HttpStatus.BAD_REQUEST),          // 사업방법서 3.가: 1,000만~4,000만·500만 단위, 2종 66세 이상 2,000만까지
+    AGE_NOT_ALLOWED(HttpStatus.BAD_REQUEST),         // 납입기간별 가입나이 밖 (요율표 존재 범위 기준)
+    PREMIUM_RATE_NOT_FOUND(HttpStatus.NOT_FOUND),
+
     // 공통 (#31): 스프링이 컨트롤러 전에 거절하는 요청. 전에는 전부 500 INTERNAL_ERROR로 나갔다
     NOT_FOUND(HttpStatus.NOT_FOUND),                           // 없는 주소
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED),         // 주소는 있지만 메서드가 다름 (GET 주소에 POST)

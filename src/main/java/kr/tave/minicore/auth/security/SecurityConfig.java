@@ -39,6 +39,8 @@ public class SecurityConfig {
     private static final String[] PUBLIC_GET = {
             "/",
             "/api/products", "/api/products/**",
+            // 예상 계산 시뮬레이터: 가입 예정자(비로그인)용. 명세 3장 — 팀 확인 전 임시 공개 (확인 필요 목록 #1)
+            "/api/simulator/estimate",
             "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**",
             "/actuator/health"
     };
