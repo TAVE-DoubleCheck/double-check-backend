@@ -5,6 +5,10 @@ import org.springframework.http.HttpStatus;
 /**
  * API 공통 오류 코드 (API 표 10장).
  *  400 = 입력 형식 오류 / 401 = 로그인 필요 / 403 = 권한 없음 / 404 = 리소스 없음 / 409 = 상태 충돌
+ *  405·415 = 스프링이 거절한 요청 / 500 = 서버 오류
+ *
+ * 변경 (#31): 공통 코드 5개 추가 (NOT_FOUND, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, CONCURRENT_UPDATE, INTERNAL_ERROR).
+ *   클라이언트 잘못인데 500으로 나가던 경우를 4xx로 구분하기 위함 (『요즘 우아한 백엔드 개발』 24장).
  */
 public enum ErrorCode {
 
@@ -31,7 +35,16 @@ public enum ErrorCode {
     QUOTE_CHANGED(HttpStatus.CONFLICT),
 
     // 지급 (API v0.4 9장에서 확정): 이미 지급된 건을 다시 실행하면 409. 화면은 회색 안내로 표시
-    PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT);
+    PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT),
+
+    // 공통 (#31): 스프링이 컨트롤러 전에 거절하는 요청. 전에는 전부 500 INTERNAL_ERROR로 나갔다
+    NOT_FOUND(HttpStatus.NOT_FOUND),                           // 없는 주소
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED),         // 주소는 있지만 메서드가 다름 (GET 주소에 POST)
+    UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE), // 지원하지 않는 Content-Type
+    // 공통 (#31): 다른 요청이 같은 행을 먼저 바꿈 (JPA @Version). 다시 조회 후 재시도하면 되는 상황이라 409
+    CONCURRENT_UPDATE(HttpStatus.CONFLICT),
+    // 공통 (#31): 예상하지 못한 서버 오류. 전에는 GlobalExceptionHandler에 문자열로만 있었다
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final HttpStatus status;
 
