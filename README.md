@@ -70,6 +70,9 @@ API 원문 ─▶ raw_api_response (호출마다 저장)
 | `AuthApiIntegrationTest` | 회원가입(BCrypt 저장·중복 409·형식 400) → 로그인 → 내 정보, 401·403, 직원 계정 자동 생성, 상품 조회 공개 |
 | `ContractApplyIntegrationTest` | seed 위에서 보험료 계산 → 가입: 계약·이력·1회차 청구서 함께 저장, 80세납 플랜 저장, 보험료 불일치 409(저장 없음), 400·401·403 |
 | `ContractQueryIntegrationTest` | 내 계약만 목록, 상세 스냅샷·다음 청구서, 청구서·이력 순서, 남의 계약 404, 직원 조회, 401 |
+| `PremiumScheduleTest` | 납입기일(말일 계약 포함)·유예 마감(다다음 달 말일)·실효일 |
+| `PaymentApiIntegrationTest` | 1회차 납부 → 계약 성립 + 장부, 이중 납부 409, 남의 청구서 404, 마감·회차 순서 409, 마지막 회차 납입완료, 자동이체 설정 |
+| `ContractDailyStepsIntegrationTest` | 청구서 발행(중복 없음·말일), 자동이체 납부, 미납 → 실효(유예 마감 다음 날), 1회차 미납 불성립, 하루씩 돌린 실효일 = 예상 실효일 |
 
 ### 맥(Apple Silicon)에서 통합 테스트가 Docker를 못 찾을 때
 
@@ -137,6 +140,9 @@ docker compose exec -T postgres psql -U insurance -d insurance -f - < checks/01_
 | 401 | `INVALID_CREDENTIALS` | 로그인 시 이메일 또는 비밀번호가 틀림 (둘을 구분하지 않음) |
 | 403 | `FORBIDDEN` | 고객이 직원 전용 주소(`/api/admin/**`) 호출 |
 | 409 | `EMAIL_ALREADY_EXISTS` | 이미 가입된 이메일 (대소문자 무시) |
+| 404 | `BILL_NOT_FOUND` | 없는 청구서·남의 청구서 |
+| 409 | `BILL_ALREADY_PAID` | 이미 낸 청구서를 다시 납부 |
+| 409 | `BILL_NOT_PAYABLE` | 앞 회차 미납·납부 마감 지남·계약 상태 때문에 낼 수 없음 |
 | 409 | `QUOTE_CHANGED` | 가입 신청 시 화면에서 본 상품 버전·월 보험료가 서버 재계산 결과와 다름 |
 | 400 | `VALIDATION_ERROR` | 필수값 누락, 날짜·형식 오류 |
 | 400 | `AMOUNT_NOT_UNIT_MULTIPLE` | 가입금액이 기준단위금액(1,000만 원) 배수가 아님 |
@@ -186,8 +192,11 @@ Swagger에서는 오른쪽 위 **Authorize** 버튼에 토큰을 붙여 넣는�
 | GET | `/api/contracts/{id}` | 고객·직원 | 상세: 가입 시점 스냅샷 + 현재 상태 + 다음에 낼 청구서(`nextBill`) |
 | GET | `/api/contracts/{id}/bills` | 고객·직원 | 청구서 전체 (1회차부터) |
 | GET | `/api/contracts/{id}/history` | 고객·직원 | 상태 이력 (오래된 순) |
+| PUT | `/api/contracts/{id}/auto-debit` | 고객 | 자동이체 켜기/끄기 `{ "enabled": true }` |
+| POST | `/api/bills/{billId}/pay` | 고객 | 보험료 납부. 1회차면 계약 성립, 마지막 회차면 납입완료. 장부 입금 기록 |
 
 고객은 자기 계약만 본다. 남의 계약은 있어도 404 `CONTRACT_NOT_FOUND`. 직원은 모든 계약 조회 가능.
+납부 규칙·매일 작업 단계(청구서 발행·자동이체·실효·불성립)는 **`docs/contract-payment.md`**.
 
 생년월일·성별은 회원 정보를 쓰고, 서버가 보험료를 다시 계산해 화면 값과 다르면 409 `QUOTE_CHANGED`.
 1회차를 낸 날이 계약일 = 보장 시작일. 자세한 건 **`docs/contract-api.md`**.

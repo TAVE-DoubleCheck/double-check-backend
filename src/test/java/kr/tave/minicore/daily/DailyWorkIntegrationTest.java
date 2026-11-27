@@ -30,7 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
-@SpringBootTest(properties = "ingest.run-on-startup=false")
+// 계약 단계(BILLING·AUTO_DEBIT·LAPSE·MATURITY) 실제 빈을 끄고 아래 테스트 빈 5개로 뼈대만 확인한다 (BE B 연결 후 추가)
+@SpringBootTest(properties = {"ingest.run-on-startup=false", "daily.contract-steps.enabled=false"})
 @Import(DailyWorkIntegrationTest.Steps.class)
 @Testcontainers
 class DailyWorkIntegrationTest {
