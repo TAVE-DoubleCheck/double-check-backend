@@ -34,6 +34,9 @@ public enum ErrorCode {
     // 가입 시 화면에서 본 상품 버전·월 보험료가 서버 재계산 결과와 다름 → 다시 계산해서 보여 주고 확인받기
     QUOTE_CHANGED(HttpStatus.CONFLICT),
 
+    // 청구 (BE C, #33): 접수 단계 자동 점검 실패. 실패 항목은 details.failedChecks (이슈 #8 초안 이름)
+    CLAIM_NOT_ACCEPTABLE(HttpStatus.CONFLICT),
+
     // 지급 (API v0.4 9장에서 확정): 이미 지급된 건을 다시 실행하면 409. 화면은 회색 안내로 표시
     PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT),
 
