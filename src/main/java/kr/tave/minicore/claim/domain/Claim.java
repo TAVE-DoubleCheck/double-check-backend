@@ -1,6 +1,7 @@
 package kr.tave.minicore.claim.domain;
 
-// 새 파일 (#33): 보험금 청구 1건 (V5 claim). 이번 이슈는 접수(생성)만, 심사·지급 메서드는 다음 이슈에서 추가.
+// 새 파일 (#33): 보험금 청구 1건 (V5 claim). 접수(생성).
+// 변경 (#35): 심사 시작·승인·처리 완료·거절 메서드 추가. 지급 완료(PAID)는 지급 이슈에서 추가.
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,6 +12,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import kr.tave.minicore.common.error.ApiException;
+import kr.tave.minicore.common.error.ErrorCode;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
@@ -112,6 +115,41 @@ public class Claim {
         return c;
     }
 
+    // ── 상태 변경 (#35). 허용 전이는 ClaimStatus 표 한 곳, 어기면 409 INVALID_CLAIM_STATUS ──
+
+    /** 심사 시작: RECEIVED → REVIEWING */
+    public void startReview() {
+        moveTo(ClaimStatus.REVIEWING);
+    }
+
+    /** 승인: REVIEWING → APPROVED. 승인일 = 납입면제 기준일 (회의 B-5) */
+    public void approve(LocalDate today) {
+        moveTo(ClaimStatus.APPROVED);
+        this.decidedOn = today;
+    }
+
+    /** 장해 납입면제 처리 완료: APPROVED → CLOSED (돈은 나가지 않음) */
+    public void close() {
+        moveTo(ClaimStatus.CLOSED);
+    }
+
+    /** 거절: REVIEWING → REJECTED. 사유 필수 (DB ck_claim_reject) */
+    public void reject(RejectReason reason, String memo, LocalDate today) {
+        moveTo(ClaimStatus.REJECTED);
+        this.rejectReason = reason.name();
+        this.rejectMemo = memo;
+        this.decidedOn = today;
+    }
+
+    private void moveTo(ClaimStatus next) {
+        if (!status.canTransitionTo(next)) {
+            throw new ApiException(ErrorCode.INVALID_CLAIM_STATUS,
+                    "청구 " + id + "은(는) " + status + " 상태라 " + next + "(으)로 바꿀 수 없습니다. 가능한 다음 상태: "
+                            + status.nextStatuses());
+        }
+        this.status = next;
+    }
+
     public Long getId() {
         return id;
     }
@@ -162,5 +200,9 @@ public class Claim {
 
     public String getRejectReason() {
         return rejectReason;
+    }
+
+    public String getRejectMemo() {
+        return rejectMemo;
     }
 }

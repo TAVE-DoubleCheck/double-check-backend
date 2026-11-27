@@ -5,6 +5,7 @@ package kr.tave.minicore.claim.domain;
 //     - 실제 접수(ClaimIntakeService)는 DB에서 사실을 모아 이 함수에 넣고,
 //     - 시뮬레이터(「이 날 사고 나면?」)는 예상 사실을 넣어 같은 규칙으로 결과를 본다.
 //   두 곳이 같은 코드를 쓰므로 "예상 결과 = 실제 처리 결과"를 테스트로 대조할 수 있다 (방향 수정안 6장).
+// 변경 (#35): 승인 점검 checkApproval 추가 (접수 점검 + 4 지급률 50% + 5 수익자 일치).
 
 import kr.tave.minicore.contract.domain.ContractStatus;
 
@@ -12,7 +13,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 접수 단계 판정 (점검 4 지급률·5 수익자는 심사 단계) */
+/** 접수·승인 단계 판정 */
 public final class ClaimEligibility {
 
     private ClaimEligibility() {
@@ -62,6 +63,37 @@ public final class ClaimEligibility {
         if (f.hasActiveSameTypeClaim()) {
             failed.add(ClaimCheck.NOT_DUPLICATE);
         }
+        return failed;
+    }
+
+    /**
+     * #35: 승인 판정에 필요한 사실 묶음 = 접수 사실 + 심사 결과.
+     *
+     * @param intake              접수 때와 같은 사실 (승인 시점에 다시 모은 값). 중복 여부는 "이 청구 말고 다른 청구"
+     * @param latestDisabilityRate 최신 장해지급률 판정 값. 판정 기록이 없으면 null (장해만 사용)
+     * @param beneficiaryMatches  청구인 이름·관계 = 계약 수익자 이름·관계 (사망만 사용)
+     */
+    public record ApprovalFacts(IntakeFacts intake, Integer latestDisabilityRate, boolean beneficiaryMatches) {
+    }
+
+    /**
+     * #35: 승인 점검 = 접수 점검 1·2·3·6 다시 + 점검 4·5. 실패 항목을 점검 번호 순서로 돌려준다.
+     * ★ 승인 때 처음부터 다시 검사: 접수한 뒤 판정이 바뀌거나 다른 청구가 생겼을 수 있어서 (노션 명세 「청구 승인」)
+     */
+    public static List<ClaimCheck> checkApproval(ApprovalFacts f) {
+        List<ClaimCheck> failed = new ArrayList<>(checkIntake(f.intake()));
+        ClaimType type = f.intake().type();
+
+        // 4. 장해: 최신 판정이 50 이상 (50 포함, 약관 제4조①). 판정이 없으면 실패
+        if (type == ClaimType.DISABILITY && (f.latestDisabilityRate() == null
+                || f.latestDisabilityRate() < ClaimAssessment.WAIVER_THRESHOLD)) {
+            failed.add(ClaimCheck.DISABILITY_RATE_50);
+        }
+        // 5. 사망: 청구인 = 가입 때 정한 수익자
+        if (type == ClaimType.DEATH && !f.beneficiaryMatches()) {
+            failed.add(ClaimCheck.BENEFICIARY_MATCH);
+        }
+        failed.sort(null); // enum 선언 순서 = 점검 번호 순서 (1·2·3·4·5·6)
         return failed;
     }
 }

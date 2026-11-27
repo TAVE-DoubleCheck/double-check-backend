@@ -40,6 +40,10 @@ public enum ErrorCode {
 
     // 청구 (BE C, #33): 접수 단계 자동 점검 실패. 실패 항목은 details.failedChecks (이슈 #8 초안 이름)
     CLAIM_NOT_ACCEPTABLE(HttpStatus.CONFLICT),
+    // 청구 (BE C, #35): 심사·승인·거절
+    CLAIM_NOT_FOUND(HttpStatus.NOT_FOUND),       // 없는 청구
+    INVALID_CLAIM_STATUS(HttpStatus.CONFLICT),   // 지금 상태에서 안 되는 요청 (예: 접수 상태에서 승인)
+    CLAIM_CHECK_FAILED(HttpStatus.CONFLICT),     // 승인 시 자동 점검 실패. 실패 항목은 details.failedChecks
 
     // 지급 (API v0.4 9장에서 확정): 이미 지급된 건을 다시 실행하면 409. 화면은 회색 안내로 표시
     PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT),
