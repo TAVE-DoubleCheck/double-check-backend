@@ -3,7 +3,9 @@ package kr.tave.minicore.claim.domain;
 // 새 파일 (#33): 접수 판정 규칙 단위 테스트 (DB·스프링 없음).
 //   방향 수정안 5-1의 예를 그대로 쓴다: 3/15 계약 → (미납) → 5/31 유예 종료 → 6/1 실효.
 //   5/20 사고는 보장, 6/2 사고는 보장 안 됨.
+// 추가 (#35): 승인 점검 (4 지급률 50%, 5 수익자 일치, 실패 순서).
 
+import kr.tave.minicore.claim.domain.ClaimEligibility.ApprovalFacts;
 import kr.tave.minicore.claim.domain.ClaimEligibility.IntakeFacts;
 import kr.tave.minicore.contract.domain.ContractStatus;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 
 import static kr.tave.minicore.claim.domain.ClaimCheck.AFTER_CONTRACT_START;
+import static kr.tave.minicore.claim.domain.ClaimCheck.BENEFICIARY_MATCH;
+import static kr.tave.minicore.claim.domain.ClaimCheck.DISABILITY_RATE_50;
 import static kr.tave.minicore.claim.domain.ClaimCheck.COVERED_ON_ACCIDENT_DATE;
 import static kr.tave.minicore.claim.domain.ClaimCheck.NOT_DUPLICATE;
 import static kr.tave.minicore.claim.domain.ClaimCheck.WITHIN_PAY_TERM;
@@ -86,6 +90,34 @@ class ClaimEligibilityTest {
     void 중복_청구는_6번_실패() {
         assertThat(ClaimEligibility.checkIntake(facts(ClaimType.DISABILITY, "2026-05-20", ContractStatus.ACTIVE, true)))
                 .containsExactly(NOT_DUPLICATE);
+    }
+
+    // ── #35 승인 점검 ──
+
+    /** 장해: 최신 판정 60 → 통과, 50(경계값 포함) → 통과, 40 → 점검 4 실패, 판정 없음 → 실패 */
+    @Test
+    void 장해_승인은_지급률_50_이상() {
+        IntakeFacts ok = facts(ClaimType.DISABILITY, "2026-05-20", ContractStatus.ACTIVE, false);
+        assertThat(ClaimEligibility.checkApproval(new ApprovalFacts(ok, 60, false))).isEmpty();
+        assertThat(ClaimEligibility.checkApproval(new ApprovalFacts(ok, 50, false))).isEmpty();
+        assertThat(ClaimEligibility.checkApproval(new ApprovalFacts(ok, 40, false))).containsExactly(DISABILITY_RATE_50);
+        assertThat(ClaimEligibility.checkApproval(new ApprovalFacts(ok, null, false))).containsExactly(DISABILITY_RATE_50);
+    }
+
+    /** 사망: 수익자 불일치 → 점검 5 실패 (지급률은 보지 않음) */
+    @Test
+    void 사망_승인은_수익자_일치() {
+        IntakeFacts ok = facts(ClaimType.DEATH, "2026-05-20", ContractStatus.ACTIVE, false);
+        assertThat(ClaimEligibility.checkApproval(new ApprovalFacts(ok, null, true))).isEmpty();
+        assertThat(ClaimEligibility.checkApproval(new ApprovalFacts(ok, null, false))).containsExactly(BENEFICIARY_MATCH);
+    }
+
+    /** 여러 개 실패하면 점검 번호 순서 (1 → 4 → 6) */
+    @Test
+    void 승인_실패_항목은_점검_번호_순서() {
+        IntakeFacts bad = facts(ClaimType.DISABILITY, "2026-06-02", ContractStatus.LAPSED, true);
+        assertThat(ClaimEligibility.checkApproval(new ApprovalFacts(bad, 30, false)))
+                .containsExactly(COVERED_ON_ACCIDENT_DATE, DISABILITY_RATE_50, NOT_DUPLICATE);
     }
 
     private static IntakeFacts facts(ClaimType type, String accidentDate, ContractStatus status, boolean duplicate) {
