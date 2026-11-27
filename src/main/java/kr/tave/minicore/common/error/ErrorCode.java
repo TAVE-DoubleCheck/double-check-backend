@@ -33,6 +33,10 @@ public enum ErrorCode {
     INVALID_CONTRACT_STATUS(HttpStatus.CONFLICT),
     // 가입 시 화면에서 본 상품 버전·월 보험료가 서버 재계산 결과와 다름 → 다시 계산해서 보여 주고 확인받기
     QUOTE_CHANGED(HttpStatus.CONFLICT),
+    // 납부 (BE B): 없는 청구서·내 청구서 아님 404 / 이미 낸 청구서 409 / 낼 수 없는 청구서(앞 회차 미납, 마감 지남, 계약 상태) 409
+    BILL_NOT_FOUND(HttpStatus.NOT_FOUND),
+    BILL_ALREADY_PAID(HttpStatus.CONFLICT),
+    BILL_NOT_PAYABLE(HttpStatus.CONFLICT),
 
     // 청구 (BE C, #33): 접수 단계 자동 점검 실패. 실패 항목은 details.failedChecks (이슈 #8 초안 이름)
     CLAIM_NOT_ACCEPTABLE(HttpStatus.CONFLICT),

@@ -6,11 +6,14 @@ import jakarta.validation.Valid;
 import kr.tave.minicore.auth.security.LoginUser;
 import kr.tave.minicore.contract.service.ContractApplyService;
 import kr.tave.minicore.contract.service.ContractQueryService;
+import kr.tave.minicore.contract.service.ContractSettingService;
+import kr.tave.minicore.contract.domain.Contract;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,17 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.util.List;
 
-@Tag(name = "계약", description = "가입 신청·내 계약 조회")
+@Tag(name = "계약", description = "가입 신청·내 계약 조회·자동이체 설정")
 @RestController
 @RequestMapping("/api/contracts")
 public class ContractController {
 
     private final ContractApplyService applyService;
     private final ContractQueryService queryService;
+    private final ContractSettingService settingService;
 
-    public ContractController(ContractApplyService applyService, ContractQueryService queryService) {
+    public ContractController(ContractApplyService applyService, ContractQueryService queryService,
+                              ContractSettingService settingService) {
         this.applyService = applyService;
         this.queryService = queryService;
+        this.settingService = settingService;
     }
 
     @Operation(summary = "가입 신청 (고객)",
@@ -64,5 +70,14 @@ public class ContractController {
     public List<ContractHistoryResponse> history(@AuthenticationPrincipal LoginUser me,
                                                  @PathVariable long contractId) {
         return queryService.history(me, contractId);
+    }
+
+    @Operation(summary = "자동이체 켜기/끄기 (고객)",
+            description = "청약·유지 중인 본인 계약만. 켜 두면 매일 작업이 납입기일에 자동 납부합니다. 그 외 상태는 409 INVALID_CONTRACT_STATUS")
+    @PutMapping("/{contractId}/auto-debit")
+    public AutoDebitResponse changeAutoDebit(@AuthenticationPrincipal LoginUser me, @PathVariable long contractId,
+                                             @Valid @RequestBody AutoDebitRequest req) {
+        Contract c = settingService.changeAutoDebit(me, contractId, req.enabled());
+        return new AutoDebitResponse(c.getId(), c.isAutoDebit());
     }
 }

@@ -82,6 +82,24 @@ public class PremiumBill {
                 contract.getMonthlyPremium());
     }
 
+    /** 납부 완료. 같은 청구서를 동시에 두 번 내면 @Version 때문에 늦은 쪽이 실패한다 */
+    public void markPaid(LocalDate on, PaidChannel channel) {
+        this.status = BillStatus.PAID;
+        this.paidOn = on;
+        this.paidChannel = channel;
+    }
+
+    /** 납입기일이 지났는데 안 냄 (화면: 미납). 유예 마감 전이라 아직 낼 수 있다 */
+    public void markOverdue() {
+        if (status == BillStatus.ISSUED) {
+            this.status = BillStatus.OVERDUE;
+        }
+    }
+
+    public boolean isPaid() {
+        return status == BillStatus.PAID;
+    }
+
     public Long getId() {
         return id;
     }

@@ -21,10 +21,14 @@
 | MATURITY | 만기 처리 |
 | RECONCILIATION | 장부 대사 |
 
+BILLING·AUTO_DEBIT·LAPSE·MATURITY는 BE B가 구현했다 (`kr.tave.minicore.contract.batch`, `docs/contract-payment.md`).
+RECONCILIATION이 등록되면 날짜 이동을 실행할 수 있다.
+
 빈 등록 순서와 관계없이 위 순서로 실행한다. 한 단계에 두 빈을 등록하면 기동에 실패한다.
 한 단계라도 구현이 없으면 날짜 이동 전에 실행을 거부한다. 로그만 남기고 성공하는 임시 빈은 두지 않는다.
 현재 실제 단계 구현이 없으므로 애플리케이션은 정상 기동하지만 날짜 이동은 실행할 수 없다.
-테스트에서만 다섯 단계를 대신하는 테스트 빈을 등록한다.
+테스트에서만 다섯 단계를 대신하는 테스트 빈을 등록한다. 이때 실제 계약 단계 빈과 겹치지 않도록
+`daily.contract-steps.enabled=false`로 계약 단계 빈을 끈다.
 
 각 단계는 전달받은 날짜를 사용한다. 같은 트랜잭션에서 `ClockService.today()`로 읽는 날짜도 같다.
 기존 서비스에 연결할 때는 기본 REQUIRED 또는 MANDATORY로 호출자의 트랜잭션에 참여한다.

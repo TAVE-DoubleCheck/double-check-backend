@@ -161,6 +161,22 @@ public class Contract {
         this.billingDay = (short) paidOn.getDayOfMonth();
     }
 
+    /**
+     * 자동이체 켜기/끄기. 청약·유지 중에만 바꿀 수 있다 (납입완료·면제·실효·종료 후에는 낼 보험료가 없음).
+     */
+    public void changeAutoDebit(boolean enabled) {
+        if (status != ContractStatus.PENDING && status != ContractStatus.ACTIVE) {
+            throw new ApiException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "계약 " + id + "은(는) " + status + " 상태라 자동이체를 바꿀 수 없습니다.");
+        }
+        this.autoDebit = enabled;
+    }
+
+    /** 전체 납입 회차 = 납입년수 × 12 */
+    public int totalInstallments() {
+        return payTermYears * 12;
+    }
+
     private void requireTransition(ContractStatus next) {
         if (!status.canTransitionTo(next)) {
             throw new ApiException(ErrorCode.INVALID_CONTRACT_STATUS,
