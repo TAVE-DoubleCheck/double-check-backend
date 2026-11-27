@@ -47,6 +47,7 @@ public enum ErrorCode {
 
     // 지급 (API v0.4 9장에서 확정): 이미 지급된 건을 다시 실행하면 409. 화면은 회색 안내로 표시
     PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT),
+    PAYOUT_NOT_FOUND(HttpStatus.NOT_FOUND), // #38: 없는 지급건
 
     // 공통 (#31): 스프링이 컨트롤러 전에 거절하는 요청. 전에는 전부 500 INTERNAL_ERROR로 나갔다
     NOT_FOUND(HttpStatus.NOT_FOUND),                           // 없는 주소

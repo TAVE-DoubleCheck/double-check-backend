@@ -1,7 +1,8 @@
 package kr.tave.minicore.claim.domain;
 
 // 새 파일 (#33): 보험금 청구 1건 (V5 claim). 접수(생성).
-// 변경 (#35): 심사 시작·승인·처리 완료·거절 메서드 추가. 지급 완료(PAID)는 지급 이슈에서 추가.
+// 변경 (#35): 심사 시작·승인·처리 완료·거절 메서드 추가.
+// 변경 (#38): 지급 완료 markPaid (APPROVED → PAID) 추가.
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -131,6 +132,11 @@ public class Claim {
     /** 장해 납입면제 처리 완료: APPROVED → CLOSED (돈은 나가지 않음) */
     public void close() {
         moveTo(ClaimStatus.CLOSED);
+    }
+
+    /** #38: 사망보험금 지급 완료: APPROVED → PAID */
+    public void markPaid() {
+        moveTo(ClaimStatus.PAID);
     }
 
     /** 거절: REVIEWING → REJECTED. 사유 필수 (DB ck_claim_reject) */
